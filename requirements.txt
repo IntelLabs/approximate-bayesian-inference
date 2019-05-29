@@ -1,0 +1,7 @@
+numpy
+pywavefront
+moderngl
+pyopengl
+pygame
+pybullet
+Pillow
