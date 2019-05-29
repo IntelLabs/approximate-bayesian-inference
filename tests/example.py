@@ -62,7 +62,7 @@ def pybullet_example():
 
     # Example image node
     image_display = CImage(scene.ctx)
-    image_display.set_texture("textures/intel_labs.png")
+    image_display.set_texture("../textures/intel_labs.png")
     image_display.set_position((-1, 0.6), (0.4, 0.4))
     imgnode = CNode(geometry=image_display)
     scene.insert_graph([imgnode])

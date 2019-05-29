@@ -5,3 +5,7 @@ pyopengl
 pygame
 pybullet
 Pillow
+pyglfw
+matplotlib
+
+sudo apt install libglfw3-dev
