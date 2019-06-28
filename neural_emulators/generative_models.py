@@ -1,17 +1,9 @@
-from neural_emulators.common import *
 import torch.nn as nn
 import torch.utils.data
 import json
 
-class CGenerativeModel:
-    def initialize(self, model):
-        raise NotImplementedError
-
-    def generate(self, params):
-        raise NotImplementedError
-
-    def gradient(self):
-        raise NotImplementedError
+from common import *
+from generative_models.CGenerativeModelBase import CGenerativeModel
 
 
 class CGenerativeModelNN(nn.Module):

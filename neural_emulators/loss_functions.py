@@ -1,4 +1,4 @@
-from neural_emulators.common import *
+from common import *
 from scipy.spatial import distance
 import torch.autograd as ag
 from math import pi as PI
