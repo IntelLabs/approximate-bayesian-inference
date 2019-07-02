@@ -6,11 +6,11 @@
     Date last modified: May 2019
     Copyright: Intel Corporation
 """
-from common import *
-from spaces.BaseSpace import BaseSpace
+from common.common import *
+from common.CBaseSpace import CBaseSpace
 
 
-class ContinousSpace(BaseSpace):
+class ContinousSpace(CBaseSpace):
     def __init__(self, dims, sampler=None, min=None, max=None):
 
         self.min = min

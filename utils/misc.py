@@ -1,6 +1,5 @@
-import numpy as np
-import torch
-from neural_emulators.common import *
+from common.common import *
+
 
 def resample_trajectory(traj, old_sample_rate, new_sample_rate, ndims=3):
 
@@ -19,6 +18,7 @@ def resample_trajectory(traj, old_sample_rate, new_sample_rate, ndims=3):
             resampled = resampled[0:int(n_points) * ndims]
 
         return resampled
+
 
 def to_indices(space_min, resolution, x, y, z):
     i = int((x - space_min[0]) / resolution)

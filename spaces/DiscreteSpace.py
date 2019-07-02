@@ -6,11 +6,11 @@
     Date last modified: May 2019
     Copyright: Intel Corporation
 """
-from common import *
-from spaces.BaseSpace import BaseSpace
+from common.common import *
+from common.CBaseSpace import CBaseSpace
 
 
-class DiscreteSpace(BaseSpace):
+class DiscreteSpace(CBaseSpace):
     def __init__(self, labels, sampler):
         self.labels = labels
         if sampler is None:

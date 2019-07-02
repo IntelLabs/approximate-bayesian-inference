@@ -12,22 +12,20 @@ import copy
 #######################################
 # GENERIC IMPORTS (no need to edit)
 #######################################
-from neural_emulators.common import *
+from common.common import *
 
 ## Samplers
-from neural_emulators.samplers import CBoundedNormalSampler
-from neural_emulators.samplers import CUniformSampler
-from neural_emulators.samplers import CMultivariateGaussian
-from neural_emulators.samplers import CMixtureModel
+from samplers.CSamplerUniform import CSamplerUniform
+from samplers.CSamplerMultivariateNormal import CSamplerMultivariateNormal
+from samplers.CSamplerMixtureModel import CSamplerMixtureModel
 
 ## Inference methods
-from neural_emulators.emulator_inference import CInferenceMetropolisHastings
-from neural_emulators.emulator_inference import CInferenceSMC
-from neural_emulators.emulator_inference import CInferenceGrid
-from neural_emulators.emulator_inference import CInferenceQuadtree
-from neural_emulators.emulator_inference import CInferenceABCReject
-from neural_emulators.emulator_inference import CInferenceABCSMC
-from neural_emulators.emulator_inference import CInferenceGradient
+from inference.CInferenceMetropolisHastings import CInferenceMetropolisHastings
+from inference.CInferenceSequentialMonteCarlo import CInferenceSMC
+from inference.CInferenceTreePyramid import CInferenceQuadtree
+from inference.CInferenceGrid import CInferenceGrid
+from inference.CInferenceABCReject import CInferenceABCReject
+from inference.CInferenceABCSequentialMonteCarlo import CInferenceABCSMC
 
 ## Likelihood function selection
 from neural_emulators.loss_functions import log_likelihood_slacks as likelihood_f
@@ -39,11 +37,11 @@ from neural_emulators.generative_models import CGenerativeModelNeuralEmulator
 ##############################
 # APPLICATION SPECIFIC IMPORTS (import from your application specific generative simulator and observation model)
 ##############################
-from reaching_intent_estimation.generative_models import CGenerativeModelSimulator as CGenerativeSimulator
+from reaching_intent.generative_models.generative_models import CGenerativeModelSimulator as CGenerativeSimulator
 # from reaching_intent_estimation.observation_models import CObservationModelDataset as CObservationModel
-from reaching_intent_estimation.observation_models import CObservationModelContinousDataset as CObservationModel
+from reaching_intent.observation_models import CObservationModelContinousDataset as CObservationModel
 
-from manipulator_planning_control import pybullet_utils as pb
+# from manipulator_planning_control import pybullet_utils as pb
 
 
 #######################################
@@ -51,9 +49,9 @@ from manipulator_planning_control import pybullet_utils as pb
 #######################################
 from mss import mss     # To take screenshots
 import pyViewer         # Simple visualization engine
-from neural_emulators_code.utils.draw import draw_point
-from neural_emulators_code.utils.draw import draw_trajectory
-from neural_emulators_code.utils.draw import draw_text
+from utils.draw import draw_point
+from utils.draw import draw_trajectory
+from utils.draw import draw_text
 ###################################
 
 
@@ -143,7 +141,7 @@ simulator_params["objects"] = simulator_objects
 simulator_params["robot_controller"] = None
 
 # Uniform prior distribution
-prior_sampler = CUniformSampler(param_limits_min, param_limits_max)
+prior_sampler = CSamplerUniform({"min": param_limits_min, "max": param_limits_max})
 
 # Gaussian proposal distribution
 param_sampler_mean = torch.zeros_like(param_limits_min)
@@ -207,12 +205,6 @@ if obs_viz:
     scene.camera.beta = 0.7
     scene.camera.r = 4.0
     scene.camera.camera_matrix = scene.camera.look_at((0,0,0))
-
-    # Set the resting position for each joint
-    joint_indices = pb.get_actuable_joint_indices(neSimulator.model_id, neSimulator.sim_id)
-    joint_rest_positions = [0] * len(joint_indices)
-    joint_rest_positions[5] = -1.57  # Elbow at 90 deg
-    joint_rest_positions[6] = 1.57  # Palm down
 
 
 #####################################################################################
@@ -294,13 +286,6 @@ for method, grid_size in zip(inference_methods, inference_grid_sizes):
                 # Show GT trajectory
                 # draw_trajectory(obs_traj.view(-1, n_dims),
                 #                 [0, 1, 1, 1], 3, physicsClientId=scene, draw_points=False)
-
-                # Move the end effector to the current position of the observation
-                # joint_vals = pb.get_actuable_joint_angles(neSimulator.model_id, physicsClientId=neSimulator.sim_id)
-                # joints_ik = pb.get_ik_jac_pinv_ns(model=neSimulator.model_id, eef_link=neSimulator.eef_link,
-                #                                   target=obs_traj[-n_dims:], joint_ini=joint_vals, cmd_sec=joint_rest_positions,
-                #                                   physicsClientId=neSimulator.sim_id, debug=False)
-                # pb.set_joint_angles(neSimulator.model_id, joints_ik, physicsClientId=neSimulator.sim_id)
 
 
             t_inf = time.time()

@@ -1,4 +1,4 @@
-DEPENDENCIES
+Dependencies
 ============
 - General
     - pytorch
@@ -10,7 +10,7 @@ DEPENDENCIES
     - matplotlib
 
 
-NOTATION
+Notation
 ========
 - x      : state space
 - o      : observation space
@@ -27,7 +27,7 @@ observation from the observation model is compared with a generated observation:
 distribution p(x) can be written as: x ~ p(x). 
 
 
-ARCHITECTURE
+Architecture
 ============
 - Space. Represents a multidimensional space. Has a sampler attached that allows generating valid sample from the space.
 

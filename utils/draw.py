@@ -1,14 +1,20 @@
-import pyViewer
 import numpy as np
 import pybullet as p
 import matplotlib.cm as cm  # for the colormap
 import copy
 
+import pyViewer.pyViewer.viewer as pyViewer
+
+
 def get_heat_color(f):
     res = cm.hot(f)
     return res
 
+
 def draw_line(a, b, color=[1, 0, 0, 1], width=1, lifetime=0, physicsClientId=0, img=None, camera=None):
+    if physicsClientId is None:
+        return
+
     if isinstance(physicsClientId, pyViewer.CScene):
         physicsClientId.draw_line(np.array(a, np.float32),
                                   np.array(b, np.float32),
@@ -20,6 +26,9 @@ def draw_line(a, b, color=[1, 0, 0, 1], width=1, lifetime=0, physicsClientId=0, 
 
 
 def draw_point(pt, color=[1, 0, 0], size=0.1, width=1, lifetime=0, physicsClientId=0, img=None, camera=None):
+    if physicsClientId is None:
+        return
+
     res = []
     lxa = [pt[0] - (size / 2), pt[1], pt[2]]
     lxb = [pt[0] + (size / 2), pt[1], pt[2]]
@@ -34,6 +43,9 @@ def draw_point(pt, color=[1, 0, 0], size=0.1, width=1, lifetime=0, physicsClient
 
 
 def draw_trajectory(traj, color=[1, 0, 0], width=1, lifetime=0, physicsClientId=0, draw_points=True, img=None, camera=None):
+    if physicsClientId is None:
+        return
+
     lines = []
     for i in range(1, int(len(traj))):
         lines.append(draw_line(traj[i-1][0:3], traj[i][0:3], color, width, lifetime, physicsClientId, img=img, camera=camera))
@@ -44,6 +56,9 @@ def draw_trajectory(traj, color=[1, 0, 0], width=1, lifetime=0, physicsClientId=
 
 
 def draw_text(text, position, visualizer, color=(1,1,1)):
+    if visualizer is None:
+        return
+
     if isinstance(visualizer, pyViewer.CScene):
         visualizer.draw_text(text, position, color)
     elif visualizer is not None:
@@ -51,6 +66,9 @@ def draw_text(text, position, visualizer, color=(1,1,1)):
 
 
 def draw_trajectory_cov(traj, cov, color_traj=[1, 0, 0], width=1, lifetime=0, physicsClientId=0, color_cov=[1, 0, 0]):
+    if physicsClientId is None:
+        return
+
     num_labels = 10
 
     traj = traj.view(-1, 3).detach()
@@ -82,11 +100,13 @@ def draw_trajectory_cov(traj, cov, color_traj=[1, 0, 0], width=1, lifetime=0, ph
         if (i % label_gap) == 0 and len(traj[i]) > 3:
             lines.append(p.addUserDebugText("%.3f" % traj[i][3], textPosition=traj[i][0:3]))
 
-
     return lines
 
 
 def draw_trajectory_diff(t1, t2, color=[1, 0, 0], width=1, lifetime=0, physicsClientId=0):
+    if physicsClientId is None:
+        return
+
     lines = []
 
     for i in range(min(len(t1), len(t2))):
@@ -95,6 +115,9 @@ def draw_trajectory_diff(t1, t2, color=[1, 0, 0], width=1, lifetime=0, physicsCl
 
 
 def draw_arrow(a, b, color=[1, 0, 0], width=1, lifetime=0, physicsClientId=0):
+    if physicsClientId is None:
+        return
+
     obj_ids = []
     a = np.array(a)
     b = np.array(b)
@@ -105,7 +128,10 @@ def draw_arrow(a, b, color=[1, 0, 0], width=1, lifetime=0, physicsClientId=0):
 
 
 def draw_box(a, b, color=[1, 0, 0], width=1, lifetime=0, physicsClientId=0):
-    obj_ids = []
+    if physicsClientId is None:
+        return
+
+    obj_ids = list()
 
     obj_ids.append(draw_line([a[0], a[1], a[2]], [a[0], a[1], b[2]], color, width, lifetime, physicsClientId=physicsClientId))
     obj_ids.append(draw_line([a[0], a[1], a[2]], [a[0], b[1], a[2]], color, width, lifetime, physicsClientId=physicsClientId))
@@ -128,6 +154,9 @@ def draw_box(a, b, color=[1, 0, 0], width=1, lifetime=0, physicsClientId=0):
 
 
 def draw_point_cloud(points, colors, physicsClientId=0, size=0.1, width=1, img=None, camera=None):
+    if physicsClientId is None:
+        return
+
     assert len(points) == len(colors)
 
     obj_ids = []
@@ -151,7 +180,8 @@ def draw_point_cloud(points, colors, physicsClientId=0, size=0.1, width=1, img=N
 
 
 def draw_samples(samples, weights, visualizer, width=1):
-    assert visualizer is not None
+    if visualizer is None:
+        return
     n_samples = len(samples)
     idx = np.argmax(weights)
     idx_slack = int(idx / n_samples)

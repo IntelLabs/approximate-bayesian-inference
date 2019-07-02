@@ -1,5 +1,4 @@
-from common import *
-from inference import CBaseInferenceAlgorithm
+from common import CBaseInferenceAlgorithm
 from utils.draw import draw_samples
 
 

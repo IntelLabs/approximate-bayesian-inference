@@ -1,8 +1,6 @@
 import collections
-import time
 
-from common import *
-from inference import CBaseInferenceAlgorithm
+from common import CBaseInferenceAlgorithm
 from utils.CQuadtree import *
 from utils.draw import draw_line
 from utils.draw import get_heat_color

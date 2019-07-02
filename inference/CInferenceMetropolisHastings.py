@@ -1,57 +1,59 @@
 import time
 import numpy.random as rd
 
-from common import *
-from inference import CBaseInferenceAlgorithm
+from common.common import *
+from common.CBaseInferenceAlgorithm import CBaseInferenceAlgorithm
 from utils.draw import draw_point
+from utils.draw import draw_trajectory
 
 
 class CInferenceMetropolisHastings(CBaseInferenceAlgorithm):
-    def __init__(self, params=None):
-        super(CInferenceMetropolisHastings, self).__init__(params)
-        self.proposal_dist = None
+    def __init__(self):
+        super(CInferenceMetropolisHastings, self).__init__()
 
-    def inference(self, obs, nsamples, prior_sampler, device, visualizer=None, proposal_sampler=None,
-                  slacks=t_tensor([1E-4]), img = None, camera = None, burn_in_samples=100):
+    def inference(self, obs, nuisance, proposal, gen_model, likelihood_f, params, device=torch.device("cpu"), visualizer=None,
+                  slacks=t_tensor([1E-4]), img=None, camera=None):
         """ Document this algorithm properly with docstrings making the associations between the variables
             and the mathematical notation in here: https://en.wikipedia.org/wiki/Metropolis%E2%80%93Hastings_algorithm
         """
-        assert self.likelihood_f is not None
-        assert self.generative_model is not None
+        assert likelihood_f is not None
+        assert gen_model is not None
 
-        params = prior_sampler.sample(None)
-        params_ml = params
-        max_likelihood = 0
+        nsamples = params["nsamples"]
+        burn_in_samples = params["burn_in"]
+        proposal_sampler = params["proposal_dist"]
+
+        z = proposal
         n_evals = 0
         samples = t_tensor([]).to(device)
         last_likelihood = - float_epsilon
         timeout = 5.0
         time_ini = time.time()
+        time_samples = np.array([])
         while len(samples) < nsamples and timeout > (time.time() - time_ini):
+            stime_ini = time.time()
             n_evals = n_evals + 1
-            params_hat = proposal_sampler.sample(params)       # Sample from the proposal distribution a new value for the parameters
-            gen_obs = self.generative_model.model(params_hat.view(1,-1)).cpu().detach().numpy()  # TODO: Check how to remove the inline casts
-            likelihood, grad = self.likelihood_f(obs, gen_obs, len(gen_obs), slack=slacks)
+            z_hat = z + proposal_sampler.sample(nsamples=1, params=None)   # Sample from the proposal distribution a new value for the parameters
+            gen_obs = gen_model.generate(z_hat, nuisance).detach()
+            likelihood, grad = likelihood_f(obs, gen_obs, len(gen_obs), slack=slacks)
 
-            alpha = likelihood - last_likelihood                    # Compute acceptance likelihood (subtract loglikelihooods)
-            # print("MCMC accepted samples:", len(samples))
-            u = rd.uniform(0, 1)                                    # Sample the acceptance likelihood
-            if alpha > np.log(u):                                           # If sample is accepted run the MH update step
-                params = params_hat
+            alpha = likelihood - last_likelihood    # Compute acceptance likelihood (subtract loglikelihooods)
+            u = rd.uniform(0, 1)                    # Sample the acceptance likelihood
+            if alpha > np.log(u):                   # If sample is accepted run the MH update step
+                z = z_hat
                 last_likelihood = likelihood
-                samples = torch.cat((samples, params.view(1, self.particle_dims)))
+                samples = torch.cat((samples, z.view(1, -1)))
+                draw_point(z_hat.view(-1), [0, 1, 0], 0.02, physicsClientId=visualizer)
+                # draw_trajectory(gen_obs.view(-1, 3), [0, 1, 0], physicsClientId=visualizer, draw_points=False)
+            # else:
+            #     draw_point(z_hat.view(-1), [1, 0, 0], 0.01, physicsClientId=visualizer)
+            # print("MCMC accepted samples:", len(samples))
 
-                if likelihood > max_likelihood:
-                    params_ml = params_hat
-                    max_likelihood = likelihood
+            time_samples = np.hstack((time_samples, np.array([time.time()-stime_ini])))
 
-                if visualizer is not None:
-                    if len(samples) > burn_in_samples:
-                        draw_point(params_hat[3:6], color=[0, 0, 1], size=0.03, width=1, physicsClientId=visualizer)
-                    else:
-                        draw_point(params_hat[3:6], color=[1, 0, 0], size=0.01, width=1, physicsClientId=visualizer)
-
+        print("MCMC stats: Total samples: %d || Accepted: %d || Accept Ratio: %3.2f || Avg. sample time: %3.3fs" %
+              (n_evals, len(samples), (len(samples)/float(n_evals))*100.0, np.mean(time_samples)))
         if len(samples) <= burn_in_samples:
-            return torch.mean(samples,0), slacks[0], n_evals
+            return samples, slacks[0], n_evals
         else:
-            return torch.mean(samples[burn_in_samples:], 0), slacks[0], n_evals
+            return samples[burn_in_samples:], slacks[0], n_evals

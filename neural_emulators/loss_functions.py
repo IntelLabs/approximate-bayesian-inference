@@ -1,4 +1,4 @@
-from common import *
+from common.common import *
 from scipy.spatial import distance
 import torch.autograd as ag
 from math import pi as PI
@@ -101,7 +101,6 @@ def log_likelihood_slacks(x, trajs, batch_size=1, slack=t_tensor([0.01])):
     if k > l:
         k = l
         x = x[0:k]
-
 
     x = x.cpu().numpy()
 
