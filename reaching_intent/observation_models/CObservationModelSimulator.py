@@ -1,19 +1,13 @@
-import sys, os
-sys.path.insert(0, os.path.abspath('..'))
+from common.common import *
+from common.CBaseObservationModel import CBaseObservationModel
+from utils.misc import resample_trajectory
 
-import torch
-import pybullet as p
-from manipulator_planning_control.pybullet_utils import get_ik_jac_pinv_ns
-from manipulator_planning_control.pybullet_utils import set_joint_angles
-from reaching_intent_estimation.generative_models import CGenerativeModelSimulator
-from neural_emulators_code.utils.misc import resample_trajectory
-from reaching_intent_estimation.generative_models import CReachingDataset
-from neural_emulators.observation_models import CObservationModel
 
-# TODO: Fix this observation model. With the new controller implementation
-class CObservationModelSimulator(CGenerativeModelSimulator):
+# TODO: Finalize refactoring of this observation model
+class CObservationModelSimulator(CBaseObservationModel):
     def __init__(self, params):  #[model, viz, timestep, goal_threshold, ini, goal, sigma]
-        super(CObservationModelSimulator,self).__init__(params)
+        raise NotImplementedError
+        super(CObservationModelSimulator, self).__init__(params)
         self.ini = params[3]
         self.goal = params[4]
         self.sigma = params[5]

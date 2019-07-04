@@ -7,6 +7,36 @@ from utils.misc import resample_trajectory
 import utils.pybullet_utils as pb
 from utils.draw import draw_point
 from utils.draw import draw_trajectory
+import utils.pybullet_utils as pb
+import utils.pybullet_controller as pbc
+
+
+def create_sim_params(sim_viz=True, sim_timestep=0.01, sim_time=5.0,
+                      model_path="pybullet_models/human_torso/model.urdf", sample_rate=30):
+    simulator_params = dict()
+    simulator_params["robot_model_path"] = model_path
+    simulator_params["visualization"] = sim_viz
+    simulator_params["timestep"] = sim_timestep
+    simulator_params["episode_time"] = sim_time
+    simulator_params["sample_rate"] = sample_rate
+    simulator_params["sim_id"] = 0
+    simulator_objects = dict()
+    simulator_objects["path"] = ["pybullet_models/table/table.urdf"]
+    simulator_objects["pose"] = [[0.6, 0, -0.65]]
+    simulator_objects["static"] = [True]
+    simulator_params["objects"] = simulator_objects
+
+    # Controller parameters
+    Kp = 10
+    Kd = 0
+    Ki = 0.01
+    iClamp = 25.0
+    Krep = 0.1
+    PIDcontroller = pbc.CPIDController(Kp=Kp, Kd=Kd, Ki=Ki, iClamp=iClamp)  # Controller to be used
+    controller = pbc.CPotentialFieldController(Krep=Krep, ctrl=PIDcontroller)
+    simulator_params["robot_controller"] = controller
+
+    return simulator_params
 
 
 class CGenerativeModelSimulator(CBaseGenerativeModel):
@@ -54,6 +84,13 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
 
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1)
 
+        # Set the resting position for each joint
+        joint_indices = pb.get_actuable_joint_indices(self.model_id, self.sim_id)
+        joint_rest_positions = torch.zeros(len(joint_indices))
+        joint_rest_positions[5] = -1.04  # Elbow at 60 deg
+        joint_rest_positions[6] = 1.57   # Palm down
+        self.joint_rest_positions = joint_rest_positions
+
     def reset(self):
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0)
         p.resetSimulation(physicsClientId=self.sim_id)
@@ -90,7 +127,8 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
             K = n[i, 3:]       # Controller parameters (Kp Ki Kd iClamp Krep)
 
             # Obtain initial joint values corresponding to the start cartesian position
-            joint_vals = pb.get_actuable_joint_angles(self.model_id, physicsClientId=self.sim_id)
+            # joint_vals = pb.get_actuable_joint_angles(self.model_id, physicsClientId=self.sim_id) # Use this for generating ik solutions that start at the current position
+            joint_vals = torch.zeros_like(t_tensor(self.joint_rest_positions))
             joints_ik = pb.get_ik_jac_pinv_ns(model=self.model_id, eef_link=self.eef_link,
                                               target=start, joint_ini=joint_vals, cmd_sec=self.joint_rest_positions,
                                               physicsClientId=self.sim_id, debug=False)
@@ -195,12 +233,12 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
             debug_traj = []
             p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1)
 
-        #Reach for a via-point inbetween
+        # Reach for a via-point inbetween
         current = pb.get_eef_pose(model, eef_link, physicsClientId)
         via_point = t_tensor([current[0] + (goal[0] - current[0])/2, current[1] + (goal[1] - current[1])/2, goal[2]+0.2])
-        via_point_satisfied = False
+        via_point_satisfied = True
         real_goal = goal
-        goal = via_point
+        # goal = via_point
         x_err_mod = goal_threshold + 10
         while not is_goal_satisfied and p.isConnected(physicsClientId=physicsClientId):
             if x_err_mod < 0.15 and not via_point_satisfied:

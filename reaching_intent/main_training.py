@@ -22,6 +22,7 @@ from neural_emulators.CNeuralEmulatorNN import CNeuralEmulatorNN
 from reaching_intent.generative_models.CReachingDataset import CReachingDataset
 from neural_emulators.CGenerativeModelNeuralEmulator import CGenerativeModelNeuralEmulator
 from reaching_intent.generative_models.CGenerativeModelSimulator import CGenerativeModelSimulator
+from reaching_intent.generative_models.CGenerativeModelSimulator import create_sim_params
 from neural_emulators.loss_functions import loss_MSE
 ##############################
 
@@ -58,7 +59,7 @@ train_loss_threshold    = -3000
 
 train_epochs            = 10
 
-train_learning_rate     = 1e-3
+train_learning_rate     = 1e-4
 
 minibatch_size          = 64
 
@@ -66,7 +67,7 @@ activation              = torch.nn.functional.tanh
 
 train_percentage        = 0.9
 
-nn_layers               = 4
+nn_layers               = 5
 
 loss_f                  = loss_MSE
 
@@ -79,7 +80,7 @@ nn_model_path = "pytorch_models/test10k_gpu_MSE_2.pt"
 
 # dataset_path = "datasets/continous_table10K.dat"
 # dataset_path = "datasets/10k_5_0_0.01_25_0.1_viapoint.dat"
-dataset_path = "datasets/default.dat"  # Small dataset for testing
+dataset_path = "datasets/default.dat"  # Small dataset for testing the approach
 
 debug = False
 
@@ -105,23 +106,9 @@ neNEmulator.model.debug = False
 
 
 if viz_debug:
-    # Load simulator
-    simulator_params = dict()
-    simulator_params["robot_model_path"] = "pybullet_models/human_torso/model.urdf"
-    simulator_params["visualization"] = True
-    simulator_params["timestep"] = 0.001
-    simulator_params["episode_time"] = sim_time
-    simulator_params["sample_rate"] = sample_rate
-    simulator_params["sim_id"] = 0
-    simulator_params["robot_controller"] = None
-    simulator_objects = dict()
-    simulator_objects["path"] = ["pybullet_models/table/table.urdf"]
-    simulator_objects["pose"] = [[0.6, 0, -0.65]]
-    simulator_objects["static"] = [True]
-    simulator_params["objects"] = simulator_objects
+    # Load simulator for visualization purposes only
+    simulator_params = create_sim_params(sim_time=sim_time, sample_rate=sample_rate)
     neSimulator = CGenerativeModelSimulator(simulator_params)
-    p.resetDebugVisualizerCamera(cameraDistance=1.3, cameraYaw=30, cameraPitch=210, cameraTargetPosition=[0.5, -0.3, -0.1],
-                                 physicsClientId=neSimulator.sim_id)
 
 # Check if the NeuralEmulator is trained. Train it otherwise.
 print("=============================================")
@@ -157,10 +144,10 @@ while current_loss > train_loss_threshold:
     current_epoch = current_epoch + 1
     current_loss, loss_terms = neNEmulator.model.test(test_dataset)
     current_loss_train, loss_terms_train = neNEmulator.model.test(train_dataset)
-    print("Epoch: ", current_epoch, " train loss: ", current_loss_train, " test_loss: ", current_loss, " time:",train_time)
+    print("Epoch: ", current_epoch, " train loss: ", current_loss_train, " test_loss: ", current_loss, " time:", train_time)
     # print('   loss terms: %3.5f\t%3.5f\t%3.5f\t%3.5f' % (loss_terms[0], loss_terms[1], loss_terms[2], loss_terms[3]))
 
-    if current_epoch % 10 == 0:
+    if current_epoch % 100 == 0:
         torch.save(neNEmulator.model, nn_model_path)
         torch.save(neNEmulator.model, nn_model_path+"epoch_%d" % current_epoch)
 
@@ -170,25 +157,20 @@ while current_loss > train_loss_threshold:
             z = test_dataset.samples[sample_idx][0]
             p.removeAllUserDebugItems()
             traj_gen = neNEmulator.generate(z.to(neNEmulator.model.device).view(1,-1), n=None)[0]
-            traj_std = 1 / torch.sqrt(traj_gen[int(len(traj_gen)/2):])
-            traj_gen = traj_gen[0:int(len(traj_gen)/2)].view(-1,3)
-
             traj_gt = test_dataset.samples[sample_idx][1].view(-1,3)
-            draw_trajectory(traj_gen, color=[1, 0, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
+            draw_trajectory(traj_gen.view(-1,3), color=[1, 0, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
             draw_trajectory(traj_gt, color=[0, 1, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
-            draw_trajectory_diff(traj_gen, traj_gt, color=[0, 0, 1], width=1, physicsClientId=neSimulator.sim_id)
+            draw_trajectory_diff(traj_gen.view(-1,3), traj_gt, color=[0, 0, 1], width=1, physicsClientId=neSimulator.sim_id)
 
             # Compute and show a trajectory from the train dataset
             # sample_idx = np.random.random_integers(0, len(train_dataset)-1)
             # z = train_dataset.samples[sample_idx][0]
             # traj_gen = neNEmulator.generate(z.to(neNEmulator.model.device).view(1,-1), n=None)[0]
-            # traj_std = 1 / torch.sqrt(traj_gen[int(len(traj_gen)/2):])
-            # traj_gen = traj_gen[0:int(len(traj_gen)/2)].view(-1,3)
             #
             # traj_gt = train_dataset.samples[sample_idx][1].view(-1,3)
-            # draw_trajectory(traj_gen, color=[0.5, 0, 1], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
+            # draw_trajectory(traj_gen.view(-1,3), color=[0.5, 0, 1], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
             # draw_trajectory(traj_gt, color=[0, 0.5, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
-            # draw_trajectory_diff(traj_gen, traj_gt, color=[1, 0, 1], width=1, physicsClientId=neSimulator.sim_id)
+            # draw_trajectory_diff(traj_gen.view(-1, 3), traj_gt, color=[1, 0, 1], width=1, physicsClientId=neSimulator.sim_id)
 
             # # Take a screenshot each 100 epochs
             # if current_epoch % 100 == 0:

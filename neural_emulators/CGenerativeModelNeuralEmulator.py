@@ -34,7 +34,7 @@ class CGenerativeModelNeuralEmulator(CBaseGenerativeNeuralEmulator):
             zn = z
 
         self.NN_result = self.model(zn)
-        return self.NN_result[:, 0:int(self.output_dims/2)]  # Return the first half corresponding to the mean
+        return self.NN_result[:, 0:int(self.output_dims)]
 
     def move_to_device(self, device):
         raise NotImplementedError

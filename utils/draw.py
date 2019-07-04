@@ -22,7 +22,7 @@ def draw_line(a, b, color=[1, 0, 0, 1], width=1, lifetime=0, physicsClientId=0, 
                                   thickness=width)
 
     elif physicsClientId is not None:
-        return p.addUserDebugLine(a, b, color, width, lifetime, physicsClientId=physicsClientId)
+        return p.addUserDebugLine(a, b, color[:3], width, lifetime, physicsClientId=physicsClientId)
 
 
 def draw_point(pt, color=[1, 0, 0], size=0.1, width=1, lifetime=0, physicsClientId=0, img=None, camera=None):
@@ -153,7 +153,7 @@ def draw_box(a, b, color=[1, 0, 0], width=1, lifetime=0, physicsClientId=0):
     return obj_ids
 
 
-def draw_point_cloud(points, colors, physicsClientId=0, size=0.1, width=1, img=None, camera=None):
+def draw_point_cloud(points, colors, physicsClientId=0, size=0.01, width=1, img=None, camera=None):
     if physicsClientId is None:
         return
 
@@ -188,4 +188,4 @@ def draw_samples(samples, weights, visualizer, width=1):
     weights = copy.deepcopy(weights[idx_slack * n_samples:idx_slack * n_samples + n_samples])
     weights = (weights - np.min(weights)) / (np.max(weights) - np.min(weights))
     colors = get_heat_color(weights)
-    draw_point_cloud(samples[:,-3:], colors, physicsClientId=visualizer, size=width)
+    draw_point_cloud(samples, colors, physicsClientId=visualizer, size=width)

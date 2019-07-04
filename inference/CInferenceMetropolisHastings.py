@@ -22,18 +22,23 @@ class CInferenceMetropolisHastings(CBaseInferenceAlgorithm):
         nsamples = params["nsamples"]
         burn_in_samples = params["burn_in"]
         proposal_sampler = params["proposal_dist"]
+        timeout = params["timeout"]
 
         z = proposal
         n_evals = 0
         samples = t_tensor([]).to(device)
         last_likelihood = - float_epsilon
-        timeout = 5.0
         time_ini = time.time()
         time_samples = np.array([])
         while len(samples) < nsamples and timeout > (time.time() - time_ini):
             stime_ini = time.time()
             n_evals = n_evals + 1
-            z_hat = z + proposal_sampler.sample(nsamples=1, params=None)   # Sample from the proposal distribution a new value for the parameters
+            # Sample from the proposal distribution a new value for the parameters
+            z_hat = z + proposal_sampler.sample(nsamples=1, params=None)
+            # Limit the sample
+            z_hat = torch.max(z_hat, params["z_min"])
+            z_hat = torch.min(z_hat, params["z_max"])
+
             gen_obs = gen_model.generate(z_hat, nuisance).detach()
             likelihood, grad = likelihood_f(obs, gen_obs, len(gen_obs), slack=slacks)
 
@@ -44,7 +49,7 @@ class CInferenceMetropolisHastings(CBaseInferenceAlgorithm):
                 last_likelihood = likelihood
                 samples = torch.cat((samples, z.view(1, -1)))
                 draw_point(z_hat.view(-1), [0, 1, 0], 0.02, physicsClientId=visualizer)
-                # draw_trajectory(gen_obs.view(-1, 3), [0, 1, 0], physicsClientId=visualizer, draw_points=False)
+                draw_trajectory(gen_obs.view(-1, 3), [0, 1, 0], physicsClientId=visualizer, draw_points=False)
             # else:
             #     draw_point(z_hat.view(-1), [1, 0, 0], 0.01, physicsClientId=visualizer)
             # print("MCMC accepted samples:", len(samples))
