@@ -9,8 +9,12 @@ class CBaseObservationModel(object):
         """ Return current observation """
         raise NotImplementedError
 
-    def get_goal(self):
-        """ Return current observation """
+    def get_ground_truth(self):
+        """ Return ground truth latent values"""
+        raise NotImplementedError
+
+    def get_ground_truth_trajectory(self):
+        """ Return ground truth complete observation values"""
         raise NotImplementedError
 
     def step(self):

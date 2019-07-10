@@ -13,6 +13,7 @@ from reaching_intent.observation_models.CObservationModelDataset import CObserva
 from neural_emulators.loss_functions import log_likelihood_slacks as likelihood_f
 from spaces.ContinousSpace import ContinousSpace
 from utils.draw import draw_trajectory
+from utils.draw import draw_point
 
 from inference.CInferenceMetropolisHastings import CInferenceMetropolisHastings
 from inference.CInferenceGrid import CInferenceGrid
@@ -47,6 +48,11 @@ if __name__ == "__main__":
     n_min = param_limits_min[nuisance_mask]
     n_max = param_limits_max[nuisance_mask]
     nuisance_space = ContinousSpace(len(n_min), None, n_min, n_max)
+
+    # Discretize the slack terms to be used for inference
+    num_slacks = 50
+    inference_slacks = torch.arange(1E-6, 20.0, 20.0 / num_slacks).double()
+    inference_slacks = torch.exp(inference_slacks) * 1E-6
     #################################################################################
     #################################################################################
 
@@ -97,7 +103,7 @@ if __name__ == "__main__":
 
     # Configure inference
     inference_params = dict()
-    inference_params["nsamples"] = 100
+    inference_params["nsamples"] = 200
     inference_params["burn_in"] = 20
     inference_params["proposal_dist"] = proposal_distribution
     inference_params["z_min"] = z_min
@@ -117,12 +123,16 @@ if __name__ == "__main__":
     #################################################################################
 
     #################################################################################
-    # VISUALIZATION
+    # VISUALIZATION and RESULTS
     #################################################################################
     if sim_viz is not None:
         visualizer = gen_model_sim.sim_id
     else:
         visualizer = None
+    inference_params["visualizer"] = visualizer
+
+    with open("results.dat", "w") as f:
+        f.write("Error      Time       %Observed  Slack      t_sample t_gens   t_lprob  #Eval  #Samples\n")
     #################################################################################
     #################################################################################
 
@@ -131,6 +141,7 @@ if __name__ == "__main__":
     # neInference = neInferenceGrid
     neInference = neInferenceMCMC
     # gen_model = gen_model_sim
+    iteration = 0
     while obs_model.is_ready():
         # Obtain observation and initialize latent space and nuisance values from their priors
         o = obs_model.get_observation()
@@ -145,15 +156,47 @@ if __name__ == "__main__":
             pybullet.removeAllUserDebugItems(physicsClientId=visualizer)
             draw_trajectory(obs_model.traj.view(-1, n_dims), draw_points=False, physicsClientId=visualizer)
             draw_trajectory(o.view(-1, n_dims), draw_points=True, width=3.0, color=[1, 0, 1], physicsClientId=visualizer)
+            draw_point(obs_model.get_ground_truth()[latent_mask], [0, 1, 0], size=0.05, width=5, physicsClientId=visualizer)
 
         print("Run inference with %d observed points." % (len(o) / n_dims))
         t_inference = time.time()
-        samples, slack, nevalparts = neInference.inference(obs=o, proposal=z, nuisance=n,
-                                                           gen_model=gen_model,
-                                                           likelihood_f=likelihood_f,
-                                                           params=inference_params,
-                                                           slacks=t_tensor([1E-4]),
-                                                           visualizer=visualizer)
+        samples, likelihoods, stats = neInference.inference(obs=o, proposal=z, nuisance=n,
+                                                                    gen_model=gen_model,
+                                                                    likelihood_f=likelihood_f,
+                                                                    params=inference_params,
+                                                                    slacks=inference_slacks)
         runtime = time.time() - t_inference
-        time.sleep(0.5)
         print("Done. Obtained %d samples in %fs" % (len(samples), runtime))
+
+        #################################################################################
+        # Evaluation and stats
+        #  1 - L2 norm of the MAP predicted z and the ground truth z
+        #  2 - Percent of the observed action
+        #  3 - Inference time
+        #  4 - Number of evaluated particles
+        #  5 - Number of accepted particles (For MCMC approaches)
+        #  6 - Grid size (For quasi-MC approaches)
+        #################################################################################
+        # Compute maximum a posteriori particle
+        idx = torch.argmax(likelihoods)
+        idx_slack = int(idx / len(samples))
+        idx_part = int(idx % len(samples))
+
+        MAP_z = samples[idx_part]
+        MAP_slack = inference_slacks[idx_slack]
+        diff = obs_model.get_ground_truth()[latent_mask] - MAP_z
+        error = torch.sqrt(torch.sum(diff * diff))
+        traj_percent = float(len(o)) / len(obs_model.get_ground_truth_trajectory())
+
+        debug_text = " Error: %2.4f \n Time: %2.4f \n PercentObserved: %2.4f \n #Samples: %d \n Slack: %2.6f \n Num Evals: %d \n Num Gens: %d" % (error, runtime, traj_percent, stats["nsamples"], MAP_slack, stats["nevals"], stats["ngens"])
+        print("============================================")
+        print(debug_text)
+        print("============================================")
+        with open("results.dat", "a") as f:
+            f.write("%2.8f %2.8f %2.8f %2.8f %2.6f %2.6f %2.6f %d  %d\n" % (error, runtime, traj_percent, MAP_slack, stats["tsamples"], stats["tgens"], stats["tevals"], stats["nevals"], stats["nsamples"]))
+        iteration = iteration + 1
+
+        draw_point(MAP_z, [1, 0, 0], size=0.05, width=5, physicsClientId=visualizer)
+        time.sleep(0.1)
+        #################################################################################
+        #################################################################################

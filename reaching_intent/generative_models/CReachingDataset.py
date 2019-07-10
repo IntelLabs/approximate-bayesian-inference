@@ -32,12 +32,7 @@ class CReachingDataset(CDataset):
             out_params = resample_trajectory(t_tensor(sample[1][0:int(traj_len)]), dataset_sample_rate, output_sample_rate)
 
             # Input parameters are the start point of the trajectory, the endpoint and the controller parameters
-            # Start point
-            in_params = out_params[0:ndims]
-            # End point
-            in_params = torch.cat((in_params, out_params[-ndims:]))
-            # Control parameters  #TODO: Recreate dataset with proper control params
-            in_params = torch.cat((in_params, t_tensor([5, 0, 0.01, 0.05, 25.0])))
+            in_params = t_tensor(sample[0])
 
             if ndims * trajectory_duration * output_sample_rate > len(out_params):
                 padding = out_params[-ndims:]
@@ -55,7 +50,7 @@ class CReachingDataset(CDataset):
 
             self.x_samples = torch.cat((self.x_samples, in_params.view(1, -1)))
             self.y_samples = torch.cat((self.y_samples, out_params.view(1, -1)))
-            self.samples.append([in_params, out_params])
+            self.samples.append([in_params.view(-1), out_params.view(-1)])
 
         print("Loaded %d trajectories" % len(self.x_samples))
         return self.samples

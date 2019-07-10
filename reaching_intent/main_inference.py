@@ -344,7 +344,6 @@ for method, grid_size in zip(inference_methods, inference_grid_sizes):
             #######################################################
             #######################################################
 
-
             # Evaluate error and  store statistics
             diff = neObserver.get_goal().to(params.device) - params[-n_dims:].double()
             error = torch.sqrt(torch.sum(diff*diff))

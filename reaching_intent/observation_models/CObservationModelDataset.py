@@ -14,8 +14,11 @@ class CObservationModelDataset(CBaseObservationModel):
         self.dimensions = params["obs_dimensions"]
         self.new_trajectory()
 
-    def get_goal(self):
-        return self.traj[-self.dimensions:]
+    def get_ground_truth(self):
+        return self.goal
+
+    def get_ground_truth_trajectory(self):
+        return self.traj
 
     def get_observation(self):
         self.obs = self.traj[0:self.idx*self.dimensions]
@@ -35,4 +38,4 @@ class CObservationModelDataset(CBaseObservationModel):
             self.traj_idx = idx
         self.traj = self.dataset.y_samples[self.traj_idx]
         self.idx = self.min_points
-        self.goal = self.traj[-self.dimensions:]
+        self.goal = self.dataset.x_samples[self.traj_idx]
