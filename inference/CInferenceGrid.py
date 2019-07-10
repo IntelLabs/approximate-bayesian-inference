@@ -10,6 +10,10 @@ class CInferenceGrid(CBaseInferenceAlgorithm):
         super(CInferenceGrid, self).__init__()
 
     @staticmethod
+    def get_name():
+        return "grid"
+
+    @staticmethod
     def grid_latent_variables(dim_min, dim_max, resolution):
         dim_range = dim_max - dim_min
         num_samples = (dim_range / resolution).tolist()

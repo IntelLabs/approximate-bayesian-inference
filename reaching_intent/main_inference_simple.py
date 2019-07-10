@@ -123,6 +123,16 @@ if __name__ == "__main__":
     #################################################################################
 
     #################################################################################
+    # Generative model and algorithm selection
+    #################################################################################
+    gen_model = gen_model_neural_emulator
+    neInference = neInferenceGrid
+    # neInference = neInferenceMCMC
+    # gen_model = gen_model_sim
+    #################################################################################
+    #################################################################################
+
+    #################################################################################
     # VISUALIZATION and RESULTS
     #################################################################################
     if sim_viz is not None:
@@ -131,16 +141,14 @@ if __name__ == "__main__":
         visualizer = None
     inference_params["visualizer"] = visualizer
 
-    with open("results.dat", "w") as f:
+    with open("results_%s_%s.dat" % (gen_model.get_name(), neInference.get_name()), "w") as f:
         f.write("Error      Time       %Observed  Slack      t_sample t_gens   t_lprob  #Eval  #Samples\n")
     #################################################################################
     #################################################################################
 
-    # Select generative model and inference method
-    gen_model = gen_model_neural_emulator
-    # neInference = neInferenceGrid
-    neInference = neInferenceMCMC
-    # gen_model = gen_model_sim
+    #################################################################################
+    # INFERENCE LOOP
+    #################################################################################
     iteration = 0
     while obs_model.is_ready():
         # Obtain observation and initialize latent space and nuisance values from their priors
@@ -177,7 +185,7 @@ if __name__ == "__main__":
         #  5 - Number of accepted particles (For MCMC approaches)
         #  6 - Grid size (For quasi-MC approaches)
         #################################################################################
-        # Compute maximum a posteriori particle
+        # Compute the maximum a posteriori particle
         idx = torch.argmax(likelihoods)
         idx_slack = int(idx / len(samples))
         idx_part = int(idx % len(samples))
@@ -192,11 +200,14 @@ if __name__ == "__main__":
         print("============================================")
         print(debug_text)
         print("============================================")
-        with open("results.dat", "a") as f:
+        with open("results_%s_%s.dat" % (gen_model.get_name(), neInference.get_name()), "a") as f:
             f.write("%2.8f %2.8f %2.8f %2.8f %2.6f %2.6f %2.6f %d  %d\n" % (error, runtime, traj_percent, MAP_slack, stats["tsamples"], stats["tgens"], stats["tevals"], stats["nevals"], stats["nsamples"]))
-        iteration = iteration + 1
 
         draw_point(MAP_z, [1, 0, 0], size=0.05, width=5, physicsClientId=visualizer)
         time.sleep(0.1)
+
+        iteration = iteration + 1
         #################################################################################
         #################################################################################
+    #################################################################################
+    #################################################################################

@@ -15,6 +15,10 @@ class CBaseGenerativeModel:
     def generate(self, z, n):
         raise NotImplementedError
 
+    @staticmethod
+    def get_name():
+        raise NotImplementedError
+
     class Model(object):
         def __init__(self, generate_f, input_dim, output_dim, device):
             self.input_dim = input_dim

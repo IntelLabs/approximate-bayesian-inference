@@ -27,4 +27,7 @@ class CBaseGenerativeNeuralEmulator(CBaseGenerativeModel):
     def train(self, dataset, epochs, learning_rate):
         raise NotImplementedError
 
+    @staticmethod
+    def get_name():
+        raise NotImplementedError
 

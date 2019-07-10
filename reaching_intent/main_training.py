@@ -60,7 +60,7 @@ train_loss_threshold    = -3000
 
 train_epochs            = 1
 
-train_learning_rate     = 1e-5
+train_learning_rate     = 1e-4
 
 minibatch_size          = 64
 
@@ -72,7 +72,7 @@ nn_layers               = 5
 
 loss_f                  = loss_MSE
 
-noise_sigma             = 0.0001  # Sigma of the multivariate normal used to add noise to the ground truth position read from the simulator
+noise_sigma             = 0.01  # Sigma of the multivariate normal used to add noise to the ground truth position read from the simulator
 
 load_existing_model = True
 

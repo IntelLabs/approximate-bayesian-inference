@@ -11,6 +11,10 @@ class CInferenceMetropolisHastings(CBaseInferenceAlgorithm):
     def __init__(self):
         super(CInferenceMetropolisHastings, self).__init__()
 
+    @staticmethod
+    def get_name():
+        return "MH"
+
     def inference(self, obs, nuisance, proposal, gen_model, likelihood_f, slacks, params):
         """
         Document this algorithm properly with docstrings making the associations between the variables

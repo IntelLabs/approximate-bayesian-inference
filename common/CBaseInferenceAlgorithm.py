@@ -3,6 +3,10 @@ class CBaseInferenceAlgorithm(object):
     def __init__(self):
         pass
 
+    @staticmethod
+    def get_name():
+        raise NotImplementedError
+
     def inference(self, obs, nuisance, proposal, gen_model, likelihood_f, slacks, params):
         """
         Method that performs approximate bayesian computations to provide the posterior distribution over

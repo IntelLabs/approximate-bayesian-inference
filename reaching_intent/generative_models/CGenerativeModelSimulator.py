@@ -62,6 +62,10 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
         self.initialize(self.model_path, self.visualize, self.timestep, self.sim_time)
         self.joint_rest_positions = []
 
+    @staticmethod
+    def get_name():
+        return "sim"
+
     def initialize(self, model, visualization=False, timestep=0.01, sim_time=5.0):
         self.init_physics(visualization, timestep)
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0)

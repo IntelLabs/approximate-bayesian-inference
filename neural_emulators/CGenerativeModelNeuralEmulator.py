@@ -13,6 +13,10 @@ class CGenerativeModelNeuralEmulator(CBaseGenerativeNeuralEmulator):
         self.initialize(model)
         self.NN_result = t_tensor([])
 
+    @staticmethod
+    def get_name():
+        return "emu"
+
     def initialize(self, model):
         try:
             self.model = torch.load(model, map_location='cpu')
