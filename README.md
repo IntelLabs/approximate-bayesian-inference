@@ -57,13 +57,9 @@ Implementing a new inference algorithm
 reaching_intent.main_inference.py and comparing the results with some of the algorithms already there.
 
 
-Implementing a new neural emulator
-==================================
-1- Define/identify state variables (See an example in reaching_intent/README.md)
-    - x: latent state
-    - n: nuisance (extra variables for the generative model)
-    - z: observable variables
-    - ε: slack
+Implementing a new application with neural emulators
+====================================================
+1- Define/identify/map the variables defined in the Notation section to the specific problem (See an example in reaching_intent/README.md)
     
 2- Implement the CGenerativeModel interface (See reaching_intent.generative_models.CGenerativeModelSimulator)
 
@@ -71,13 +67,14 @@ Implementing a new neural emulator
 
 4- Implement the dataset_load(filename, k) and dataset_save(dataset, filename): custom functions (See reaching_intent.generative_models.dataset_load, dataset_save )
 
-5- Implement the CObservationModel interface (See reaching_intent_estimation.observation_models.CObservationModel)
+5- Implement the CObservationModel interface (See reaching_intent.observation_models.CObservationModel)
 
 6- Optional: Implement your custom likelihood_function or use provided (See neural_emulators.loss_functions)
 
-7- Implement the main inference script (See reaching_intent_estimation.main_inference.py, copy and make changes where required)
-
-8- Run main_{yourmodule}.py and have fun.
+7- Implement the different main scripts, copy and make changes where required:
+    - Dataset generation (e.g. reaching_intent.main_datageneration.py )
+    - Neural emulation training (e.g. reaching_intent.main_training.py)
+    - Inference (e.g. reaching_intent.main_inference.py)
 
 
 Author
@@ -87,5 +84,9 @@ Author
 
 Contributors
 ============
+
+References
+==========
+- Felip, J., Ahuja, N., Gómez-Gutiérrez, D., Tickoo, O., & Mansinghka, V. (2019). Real-time Approximate Bayesian Computation for Scene Understanding. arXiv preprint arXiv:1905.13307.
 
 Last updated: Jul 2019
