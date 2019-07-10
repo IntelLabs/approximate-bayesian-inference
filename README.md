@@ -13,18 +13,18 @@ Dependencies
 Notation
 ========
 - x      : state space
-- o      : observation space
-- z      : latent space
+- o      : observation space.
+- z      : latent space.
 - n      : nuisance space. Used to model variables that are required by the generative model
 but are not relevant for the inference process. Such that the inference will marginalize them out.
-- ε      : slack term.
+- ε      : slack term. Used to model the gap from the generative model to the observations.
 - g(z,n) : Generative model that maps the latent space to either the state space or the observation space. This can
 be a deterministic o = g(z,n) or stochastic o ~ p(o|z,n) generative model.
 - L(x,x',ε): Surrogate likelihood (ABC). Provides a likelihood value using two observations or states. Usually an 
-observation from the observation model is compared with a generated observation: L(x,g(z,n),ε) 
-- Estimations are denoted by '. For example the estimated state space is denoted as x'.
+observation from the observation model is compared with a generated observation: L(o,g(z,n),ε) 
+- Estimations are denoted by '. For example the estimated state space is denoted as x' and an estimated latent value z'.
 - The tilde "~" can be read as "distributed as". For example, the fact that a sample x is obtained from a prior 
-distribution p(x) can be written as: x ~ p(x). 
+distribution p(x) can be written as: x ~ p(x).
 
 
 Architecture
@@ -39,30 +39,37 @@ Architecture
     - o ~ p(o|x). If the state space is fully observed, the observation model is the identity operation: x = o
     
 - Generative model
-    - maps latent space and nuisance space to state space
     - maps latent space and nuisance space to observation space
     
 - Surrogate likelihood function. Used to perform inference
-    - computes L = p(g(z,n)|x,ε)
+    - computes the likelihood of a generated observation given an observation and the slack term: L = p(g(z,n)|o,ε)
     
 - Inference algorithm: Samples the PDF of the latent parameters z given the observations.
-    - Has access to generative model, observation model and likelihood
-    - Provides posterior PDF: p(z|x) or p(z|o) 
+    - Has access to generative model and likelihood function
+    - Provides the posterior PDF "p(z|o)", as a set of importance weighted samples.
 
 
-IMPLEMENTING A NEW NEURAL EMULATOR INFERENCE
-============================================
-1- Define/identify state variables (See reaching_intent_estimation/README.md)
+Implementing a new inference algorithm
+======================================
+- Implement a class derived from common.CBaseInferenceAlgorithm. 
+- See working examples in inference.CInferenceGrid and inference.CInferenceMetropolisHastings
+- The inference algorithm can be tested by adding it to the example reaching intent application in 
+reaching_intent.main_inference.py and comparing the results with some of the algorithms already there.
+
+
+Implementing a new neural emulator
+==================================
+1- Define/identify state variables (See an example in reaching_intent/README.md)
     - x: latent state
     - n: nuisance (extra variables for the generative model)
     - z: observable variables
-    - epsilon: slack
+    - ε: slack
     
-2- Implement the CGenerativeModel interface (See reaching_intent_estimation.generative_models.CGenerativeModelSimulator)
+2- Implement the CGenerativeModel interface (See reaching_intent.generative_models.CGenerativeModelSimulator)
 
-3- Implement the CGenerativeModelNN interface (See reaching_intent_estimation.generative_models.CReachingNeuralEmulatorNN)
+3- Implement the CGenerativeModelNN interface (See reaching_intent.generative_models.CReachingNeuralEmulatorNN)
 
-4- Implement the dataset_load(filename, k) and dataset_save(dataset, filename): custom functions (See reaching_intent_estimation.generative_models.dataset_load, dataset_save )
+4- Implement the dataset_load(filename, k) and dataset_save(dataset, filename): custom functions (See reaching_intent.generative_models.dataset_load, dataset_save )
 
 5- Implement the CObservationModel interface (See reaching_intent_estimation.observation_models.CObservationModel)
 
@@ -80,3 +87,5 @@ Author
 
 Contributors
 ============
+
+Last updated: Jul 2019

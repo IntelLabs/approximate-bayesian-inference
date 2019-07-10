@@ -20,7 +20,7 @@ from reaching_intent.generative_models.CReachingDataset import CReachingDataset
 # GENERIC PARAMETERS (tune for each application)
 ###################################
 dataset_path = "datasets/default.dat"
-dataset_points = 2e3   # Number of data points that the dataset will contain
+dataset_points = 1e4   # Number of data points that the dataset will contain
 dataset_gen_batch = 1e3   # Max number of data points generated before saving to a file. Important to save batches
                           # when generating huge datasets to keep memory requirements bounded
 
