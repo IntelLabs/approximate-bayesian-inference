@@ -367,7 +367,7 @@ class COffscreenWindowManager(CWindowManager):
         return [0, 0]
 
     def draw(self):
-        self.fbo.use()
+        pass
 
 
 class CPygameEvent(CEvent):
@@ -589,7 +589,7 @@ class CScene(object):
         self.fbo = self.ctx.simple_framebuffer((self.width, self.height))
         self.wm = window_manager
         self.wm.fbo = self.fbo
-
+        self.fbo.use()
 
         self.init_display(name, width, height, location)
 

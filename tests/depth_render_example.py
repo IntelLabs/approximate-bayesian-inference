@@ -4,10 +4,9 @@ import time
 from matplotlib import cm
 from PIL import Image
 import numpy as np
-import copy
 
 import pyViewer.transformations as tf
-from pyViewer.viewer import CScene, CNode, CTransform, CEvent, CImage, COffscreenWindowManager, CGLFWWindowManager
+from pyViewer.viewer import CScene, CNode, CTransform, COffscreenWindowManager, CGLFWWindowManager
 from pyViewer.geometry_makers import make_mesh
 
 os.environ["MESA_GL_VERSION_OVERRIDE"] = "3.3"
@@ -37,10 +36,10 @@ def depth_render_example(scene, camera_positions=[(0.7, 0.7, 2)], width=800, hei
 
     #####################################################
     # Image render loop
-    #####################################################
-    # depth_images = np.zeros((len(camera_positions), width, height))   # 4200 FPS for a batch of 10K 100x100px imags
-    depth_images = [np.zeros((width, height))] * len(camera_positions)  # 4580 FPS for a batch of 10K 100x100px imags (256x256 795fps) (128x128 4026fps)
-    # depth_images = list()                                             # 4496 FPS for a batch of 10K 100x100px imags
+    #####################################################               # FPS data on a i7-6700K CPU @ 4.00GHz + Titan X(Pascal)
+    # depth_images = np.zeros((len(camera_positions), width, height))   # 4200 FPS for a batch of 10K 100x100px imgs
+    depth_images = [np.zeros((width, height))] * len(camera_positions)  # 4580 FPS for a batch of 10K 100x100px imgs (256x256 795fps) (128x128 4026fps)
+    # depth_images = list()                                             # 4496 FPS for a batch of 10K 100x100px imgs
     for i, cpos in enumerate(camera_positions):
         # Move camera
         cam = viz.camera
@@ -66,11 +65,11 @@ if __name__ == "__main__":
     scene["translations"] = [(0, 0, 0), (0, 0.2, 0)]
     scene["rotations"] = [(0, 0, 0), (0, 0, 0.707)]
 
-    max_dist = 1
+    max_dist = 1.5
 
     cameras = list()
-    for i in range(1000):
-        cameras.append(np.random.uniform(low=(-np.pi, -np.pi, 0.1), high=(np.pi, np.pi, 2.0)))
+    for i in range(10000):
+        cameras.append(np.random.uniform(low=(-np.pi, -np.pi, 0.1), high=(np.pi, np.pi, max_dist)))
 
     # cameras = [(0.7, 0.7, 2), (0.7, 0.7, 1), (0.7, 0.7, 0.5), (0.7, 0.7, 0.2)]
 
@@ -78,7 +77,7 @@ if __name__ == "__main__":
     n_exeuctions = 10
     for i in range(n_exeuctions):
         t_ini = time.time()
-        images = depth_render_example(scene, cameras, height=256, width=256, show=True)
+        images = depth_render_example(scene, cameras, height=100, width=100, show=False)
         timings.append(time.time() - t_ini)
 
     print("Generated %d images in %3.3fs | %3.3ffps" % (len(cameras), np.mean(timings), len(cameras)/np.mean(timings)))
