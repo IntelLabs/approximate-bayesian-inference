@@ -108,11 +108,11 @@ void main()
 {
     float lum = dot(normalize(v_norm), normalize(v_vert - Light));
     lum = acos(lum) / 3.14159265;
-    lum = clamp(lum, 0.0, 1.0);
+    lum = clamp(lum, 0.0, 0.1);
 
     vec4 color = texture(Texture, v_text.xy);
 
-    f_color = vec4(color.rgb * lum + v_color.rgb * v_color.a * lum, color.a);
+    f_color = vec4(color.rgb + v_color.rgb * v_color.a * lum, color.a);
 }
 '''
 
@@ -187,25 +187,26 @@ class CCamera(object):
         self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
         self.sensitivity = 0.02
 
+    #TODO: Remove pygame specific keys here
     def process_event(self, event):
         if event.type == CEvent.KEYDOWN:
             if event.data[0] == pygame.K_w:
                 self.focus_point = self.focus_point + np.array([0, 0, -0.1])
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
+            if event.data[0] == pygame.K_a:
+                self.focus_point = self.focus_point + np.array([-0.1, 0.0, 0.0])
+                self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
             if event.data[0] == pygame.K_s:
                 self.focus_point = self.focus_point + np.array([0, 0, 0.1])
+                self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
+            if event.data[0] == pygame.K_d:
+                self.focus_point = self.focus_point + np.array([0.1, 0.0, 0.0])
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
             if event.data[0] == pygame.K_q:
                 self.focus_point = self.focus_point + np.array([0, 0.1, 0.0])
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
             if event.data[0] == pygame.K_e:
                 self.focus_point = self.focus_point + np.array([0, -0.1, 0.0])
-                self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
-            if event.data[0] == pygame.K_a:
-                self.focus_point = self.focus_point + np.array([-0.1, 0.0, 0.0])
-                self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
-            if event.data[0] == pygame.K_d:
-                self.focus_point = self.focus_point + np.array([0.1, 0.0, 0.0])
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
 
             if event.data[0] == pygame.K_c:
@@ -267,9 +268,9 @@ class CCamera(object):
         position[1] = self.r * np.sin(alpha) * np.cos(beta)
         position[2] = self.r * np.sin(beta)
 
-        print("Dist: ", np.sqrt(np.matmul(position, position.transpose())))
+        # print("Dist: ", np.sqrt(np.matmul(position, position.transpose())))
 
-        print("Camera pos: ", position)
+        # print("Camera pos: ", position)
 
         z_vec = position - focus
         z_vec = z_vec / np.linalg.norm(z_vec)
@@ -338,6 +339,35 @@ class CWindowManager(object):
     @staticmethod
     def get_mouse_pos():
         raise NotImplementedError()
+
+
+class COffscreenWindowManager(CWindowManager):
+    @staticmethod
+    def init_display():
+        pass
+
+    @staticmethod
+    def set_window_name(name):
+        pass
+
+    @staticmethod
+    def get_events():
+        return []
+
+    @staticmethod
+    def set_window_mode(size, options):
+        pass
+
+    @staticmethod
+    def set_mouse_pos(x, y):
+        pass
+
+    @staticmethod
+    def get_mouse_pos():
+        return [0, 0]
+
+    def draw(self):
+        self.fbo.use()
 
 
 class CPygameEvent(CEvent):
@@ -534,7 +564,7 @@ class CGLFWWindowManager(CWindowManager):
     def draw(self):
         self.window.swap_buffers()
 
-    def set_window_mode(self, size, options):
+    def set_window_mode(self, size, options=None):
         self.window.size = size
 
     def set_mouse_pos(self, x, y):
@@ -549,21 +579,23 @@ class CGLFWWindowManager(CWindowManager):
 
 
 class CScene(object):
-    def __init__(self, name="PyViewer", width=-1, height=-1, location=(0, 0), window_manager=CGLFWWindowManager(), near=0.001, far = 100.0):
+    def __init__(self, name="PyViewer", width=800, height=600, location=(0, 0), window_manager=CGLFWWindowManager(), near=0.001, far = 100.0):
         print("ModernGL: ", mgl.__version__)
         self.ctx = mgl.create_standalone_context()
 
-        self.wm = window_manager
-
         self.width = width
         self.height = height
+
+        self.fbo = self.ctx.simple_framebuffer((self.width, self.height))
+        self.wm = window_manager
+        self.wm.fbo = self.fbo
+
 
         self.init_display(name, width, height, location)
 
         self.ctx.viewport = (0, 0, self.width, self.height)
         self.root = CNode(id=0, parent=None, transform=CTransform(), geometry=None, material=None)
         self.nodes = [self.root]
-        self.fbo = self.ctx.simple_framebuffer((self.width, self.height))
 
         self.camera = CCamera()
         self.render_mode = mgl.TRIANGLES
@@ -579,24 +611,21 @@ class CScene(object):
 
         self.glut_init = False
 
+    # def __del__(self):
+    #     self.fbo.release()
+    #     self.ctx.release()
 
     #############################################################
     # GENERIC INITIALIZATION METHODS. WRAPPER TO HANDLE MULTIPLE WINDOW MANAGERS (pygame, pyglfw, ...)
     # current window manager = glfw
     #############################################################
-    def init_display(self, name, width, height, location):
+    def init_display(self, name, width, height, location, options=None):
         os.environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % location  # TODO: Verify this is not platform specific
         self.wm.init_display()
 
-        self.width = 800
-        self.height = 600
-
-        # if width == -1 or height == -1:
-        #     modes = pygame.display.list_modes()  # TODO: Remove this pygame specific call
-        #     self.width = modes[0][0]
-        #     self.height = modes[0][1]
-
-        self.wm.set_window_mode((self.width, self.height), DOUBLEBUF | OPENGL | pygame.RESIZABLE)  # TODO: Remove this pygame specific flag
+        self.width = width
+        self.height = height
+        self.wm.set_window_mode((self.width, self.height), options=options)
 
         self.wm.set_window_name(name)
 
@@ -681,14 +710,15 @@ class CScene(object):
                 break
 
     def draw(self):
-        glViewport(0, 0, self.width, self.height)
+        self.ctx.viewport = (0, 0, self.width, self.height)
+        # glViewport(0, 0, self.width, self.height)
         aspect = self.width / float(self.height)
         self.perspective = self.compute_perspective_matrix(self.FoV, self.FoV / aspect, self.near, self.far)
 
         self.ctx.enable(mgl.BLEND)
         self.ctx.enable(mgl.DEPTH_TEST)
         self.root.draw(self.perspective, self.camera.camera_matrix, np.eye(4), self.render_mode)
-        self.swap_buffers()
+        # self.swap_buffers()
 
     # TODO: Enable camera facing text rendering
     # TODO: Enable 2D text scaling
@@ -736,11 +766,14 @@ class CScene(object):
     def get_depth_image(self):
         zFar = self.far
         zNear = self.near
-        depth_buffer = glReadPixels(0, 0, self.width, self.height, GL_DEPTH_COMPONENT, GL_FLOAT)  #Get depth buffer values
+
+        depth_buffer = np.frombuffer(
+            self.fbo.read(viewport=self.ctx.viewport, components=1, dtype='f4', attachment=-1),
+            dtype=np.dtype('f4')).reshape(self.height, self.width)
+
         z_ndc = depth_buffer * 2.0 - 1.0  # Convert back to Normalized Device Coordinates [0,1] -> [-1,1]
         if self.depth_mode == self.depth_modes_linear:
             depth_image = z_ndc * (zFar - zNear) + zNear  # Linear inverse depth
-        # TODO: Fix the non-linear deprojection. It's not providing correct z values
         elif self.depth_mode == self.depth_modes_nonlinear:
             depth_image = (2.0 * zNear * zFar) / (zFar + zNear - z_ndc * (zFar-zNear))  # Non-linear inverse depth
         else:
@@ -766,15 +799,9 @@ class CScene(object):
         if event.type == CEvent.KEYDOWN:
             if event.type == CEvent.QUIT:
                 quit()
-            if event.data[0] == pygame.K_1:
-                self.render_mode = mgl.TRIANGLES
-            if event.data[0] == pygame.K_2:
-                self.render_mode = mgl.LINES
-            if event.data[0] == pygame.K_ESCAPE:
-                quit()
 
         if event.type == CEvent.VIDEORESIZE:
-            self.wm.set_window_mode((event.data[1], event.data[2]), DOUBLEBUF | OPENGL | pygame.RESIZABLE)
+            self.wm.set_window_mode((event.data[1], event.data[2]))
             aspect = event.data[1] / float(event.data[2])
             self.perspective = self.compute_perspective_matrix(self.FoV, self.FoV/aspect, self.near, self.far)
             self.width = event.data[1]

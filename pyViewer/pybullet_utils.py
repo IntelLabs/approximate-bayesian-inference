@@ -47,8 +47,9 @@ def init_physics(use_gui, timestep=0.01, physicsClientId=0):
 
 def load_simulation(model_path, objects_path, objects_pose, objects_static, physicsClientId=0):
     obstacles = []
-    # model = -1
-    model = p.loadURDF(model_path, useFixedBase=1, flags=p.URDF_USE_SELF_COLLISION_EXCLUDE_PARENT, physicsClientId=physicsClientId)
+    model = -1
+    if model_path != "":
+        model = p.loadURDF(model_path, useFixedBase=1, flags=p.URDF_USE_SELF_COLLISION_EXCLUDE_PARENT, physicsClientId=physicsClientId)
     for i in range(len(objects_path)):
         obstacles.append(p.loadURDF(objects_path[i], useFixedBase=objects_static[i], basePosition=objects_pose[i], physicsClientId=physicsClientId))
     return model, obstacles
