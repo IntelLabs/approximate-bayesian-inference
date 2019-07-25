@@ -3,7 +3,7 @@ import pybullet as p
 import matplotlib.cm as cm  # for the colormap
 import copy
 
-import pyViewer.pyViewer.viewer as pyViewer
+import pyViewer.viewer as pyViewer
 
 
 def get_heat_color(f):

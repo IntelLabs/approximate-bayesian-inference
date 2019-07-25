@@ -118,12 +118,12 @@ if __name__ == "__main__":
     neInferenceGrid = CInferenceGrid()
     inference_params["z_min"] = z_min
     inference_params["z_max"] = z_max
-    inference_params["resolution"] = 0.04
+    inference_params["resolution"] = 0.03
     #################################################################################
     #################################################################################
 
     #################################################################################
-    # Generative model and algorithm selection
+    # SELECTION of generative model and inference algorithm
     #################################################################################
     gen_model = gen_model_neural_emulator
     neInference = neInferenceGrid

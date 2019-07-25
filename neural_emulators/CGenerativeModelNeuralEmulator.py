@@ -27,17 +27,7 @@ class CGenerativeModelNeuralEmulator(CBaseGenerativeNeuralEmulator):
             self.model = None
 
     def generate(self, z, n):
-        if n is not None:
-            assert len(z) == len(n), "Latent and nuisance batch dimension does not agree"
-
-            zn = torch.zeros(len(z), len(z[0]) + len(n[0]))
-            zn[:, 0:3] = n[:, 0:3]  # Start position is a nuisance variable in this app
-            zn[:, 3:6] = z[:, 0:3]  # Goal position is the latent space of interest
-            zn[:, 6:] = n[:, 3:]    # The rest of nuisance parameters are the arm controller values
-        else:
-            zn = z
-
-        self.NN_result = self.model(zn)
+        self.NN_result = self.model(z)
         return self.NN_result[:, 0:int(self.output_dims)]
 
     def move_to_device(self, device):

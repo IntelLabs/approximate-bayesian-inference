@@ -1,5 +1,8 @@
 #!/usr/bin/python3
 
+
+# TODO!!! WARNING!! This is old code. Look at main_training_simple.py instead
+
 #################
 # SYSTEM IMPORTS
 #################
@@ -52,7 +55,11 @@ n_points                = sample_rate * sim_time
 ###################################
 # GENERIC NN PARAMETERS
 ###################################
-input_dim               = n_dims + n_dims + 5  # Start point, end point, controller params
+input_dim               = n_dims + n_dims + 5  # Start point, End point, controller params
+
+# Select the parameters that are considered nuisance and the parameters that are considered interesting
+latent_mask = t_tensor([0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0]) == 1  # We are interested in the end position
+nuisance_mask = latent_mask == 0  # The rest of the params are considered nuisance
 
 output_dim              = n_points * n_dims  # x = [xt,xt+1,..., xt+k]
 
@@ -60,15 +67,15 @@ train_loss_threshold    = -3000
 
 train_epochs            = 1
 
-train_learning_rate     = 1e-5
+train_learning_rate     = 1e-4
 
-minibatch_size          = 64
+minibatch_size          = 16
 
 activation              = torch.nn.functional.tanh
 
 train_percentage        = 0.9
 
-nn_layers               = 5
+nn_layers               = 4
 
 loss_f                  = loss_MSE
 
@@ -77,7 +84,7 @@ noise_sigma             = 0.001  # Sigma of the multivariate normal used to add 
 load_existing_model = True
 
 # nn_model_path = "models/continous_table10K.pt"
-nn_model_path = "pytorch_models/test10k_gpu_MSE_2.pt"
+nn_model_path = "pytorch_models/ne4_10k_gpu_MSE_2.pt"
 
 # dataset_path = "datasets/continous_table10K.dat"
 # dataset_path = "datasets/10k_5_0_0.01_25_0.1_viapoint.dat"
@@ -97,10 +104,11 @@ neNEmulator = CGenerativeModelNeuralEmulator(nn_model_path)  # Neural emulator f
 
 # Check if there is a neural emulator model loaded. Create a new one otherwise.
 if not neNEmulator.model or not load_existing_model:
-    neNEmulator.model = CNeuralEmulatorNN(input_dim, output_dim, train_learning_rate, nn_layers, debug, device, activation, loss_f)
+    neNEmulator.model = CNeuralEmulatorNN(torch.sum(latent_mask), output_dim, nn_layers, debug, device, activation, loss_f)
 else:
     neNEmulator.model.move_to_device(device)
 
+neNEmulator.model.latent_mask = latent_mask
 neNEmulator.model.activation = activation
 neNEmulator.model.criterion = loss_f
 neNEmulator.model.debug = False
@@ -145,28 +153,29 @@ while current_loss > train_loss_threshold:
     current_epoch = current_epoch + 1
     current_loss, loss_terms = neNEmulator.model.test(test_dataset)
     current_loss_train, loss_terms_train = neNEmulator.model.test(train_dataset)
-    print("Epoch: ", current_epoch, " train loss: ", current_loss_train, " test_loss: ", current_loss, " time:", train_time)
+    print("Epoch: %d  train loss: %3.3f  test_loss: %3.3f  time: %3.3f" %
+          (current_epoch, current_loss_train, current_loss, train_time))
     # print('   loss terms: %3.5f\t%3.5f\t%3.5f\t%3.5f' % (loss_terms[0], loss_terms[1], loss_terms[2], loss_terms[3]))
 
-    if current_epoch % 1000 == 0:
+    if current_epoch % 100 == 0:
         torch.save(neNEmulator.model, nn_model_path)
         torch.save(neNEmulator.model, nn_model_path+"epoch_%d" % current_epoch)
 
         if viz_debug:
             # Compute and show a trajectory from the test dataset
             sample_idx = np.random.random_integers(0, len(test_dataset)-1)
-            z = test_dataset.samples[sample_idx][0]
+            z = test_dataset.samples[sample_idx][0][latent_mask]
             p.removeAllUserDebugItems()
             traj_gen = neNEmulator.generate(z.to(neNEmulator.model.device).view(1,-1), n=None)[0]
             traj_gt = test_dataset.samples[sample_idx][1].view(-1,3)
             draw_trajectory(traj_gen.view(-1,3), color=[1, 0, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
             draw_trajectory(traj_gt, color=[0, 1, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
             draw_trajectory_diff(traj_gen.view(-1,3), traj_gt, color=[0, 0, 1], width=1, physicsClientId=neSimulator.sim_id)
-            draw_point(z[3:6], [0, 0, 1], size=0.05, width=5, physicsClientId=neSimulator.sim_id)
+            draw_point(z, [0, 0, 1], size=0.05, width=5, physicsClientId=neSimulator.sim_id)
 
             # Compute and show a trajectory from the train dataset
             sample_idx = np.random.random_integers(0, len(train_dataset)-1)
-            z = train_dataset.samples[sample_idx][0]
+            z = train_dataset.samples[sample_idx][0][latent_mask]
             traj_gen = neNEmulator.generate(z.to(neNEmulator.model.device).view(1,-1), n=None)[0]
 
             traj_gt = train_dataset.samples[sample_idx][1].view(-1,3)

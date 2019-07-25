@@ -7,9 +7,9 @@ import torch.utils.data
 from common.common import *
 
 
-class CNeuralEmulatorNN(nn.Module):
+class CProbabilisticNeuralEmulatorNN(nn.Module):
     def __init__(self, input_dim, output_dim, nlayers=4, debug=False, device="cpu", activation=F.relu, criterion=F.mse_loss):
-        super(CNeuralEmulatorNN, self).__init__()
+        super(CProbabilisticNeuralEmulatorNN, self).__init__()
         self.is_differentiable = True
 
         self.device = device
@@ -18,15 +18,14 @@ class CNeuralEmulatorNN(nn.Module):
         self.activation = activation
         self.criterion = criterion
         self.arch = ""
-        self.dropout = nn.Dropout(p=0.2)
 
         self.layers = [None] * nlayers
 
-        self.layers[0] = nn.Linear(input_dim, output_dim).to(device)
-        self.arch = self.arch + "fc{%d_%d}-" % (input_dim, output_dim)
+        self.layers[0] = nn.Linear(input_dim, output_dim * 2).to(device)
+        self.arch = self.arch + "fc{%d_%d}-" % (input_dim, output_dim * 2)
         for i in range(1, nlayers):
-            self.layers[i] = nn.Linear(output_dim, output_dim).to(device)  # Outputs mu and sigma. Therefore the ouput dims are * 2
-            self.arch = self.arch + "fc{%d_%d}-" % (output_dim, output_dim)
+            self.layers[i] = nn.Linear(output_dim * 2, output_dim * 2).to(device)  # Outputs mu and sigma. Therefore the ouput dims are * 2
+            self.arch = self.arch + "fc{%d_%d}-" % (output_dim * 2, output_dim * 2)
 
         self.output_dim = output_dim
         self.input_dim = input_dim
@@ -67,7 +66,16 @@ class CNeuralEmulatorNN(nn.Module):
         # Do not use activation in the last layer
         x = self.layers[-1](x)
 
-        return x
+        # Enforce the positive values for the covariance with an abs function
+        y = x.clone()
+        y[:, self.output_dim:] = torch.abs(y[:, self.output_dim:].clone())
+        # y[:, self.output_dim:] = torch.max(y[:, self.output_dim:].clone(), t_tensor([0.001]).to(self.device))
+        # x[:, self.output_dim:] = (x[:, self.output_dim:]*x[:, self.output_dim:]).clone()
+
+        # if torch.isnan(torch.sum(x)):
+        #     print("WARNING! NN output contains NaNs!")
+
+        return y
 
     @staticmethod
     def num_flat_features(x):

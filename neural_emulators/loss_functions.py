@@ -43,10 +43,9 @@ def loss_MSE(z, x):
     """
     k = len(x[0])   # Observation dimensions
 
-    fz = z[:, 0:k]  # Extract the vector of means from the nn output
+    fz = z[:, 0:k]  # Crop the the vector of predicted points to the size of the observation
 
     diff = (x - fz)
-    # term3 = diff.view(1, k) @ Sigma @ diff.view(k, 1)  # diff.view(k, 1) = diff.transpose() @ = matrix product
 
     term3 = torch.sum((diff*diff), 1)
 
