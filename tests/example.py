@@ -115,14 +115,14 @@ def pybullet_example():
         tic = time.time()
         scene.clear()
 
-        scene.draw_line(np.array([0, 0, 0], np.float32), np.array([1, 1, 1], np.float32), np.array([1, 0, 0, 1], np.float32), 5)
+        # scene.draw_line(np.array([0, 0, 0], np.float32), np.array([1, 1, 1], np.float32), np.array([1, 0, 0, 1], np.float32), 5)
 
         # TODO: BUG. If the text draw is not called inmediately before a scene.draw() the color does not work
-        mouse_x = int(scene.wm.get_mouse_pos()[0])
-        mouse_y = int(scene.wm.get_mouse_pos()[1])
-        if 0 < mouse_x < depth_image.width and 0 < mouse_y < depth_image.height:
-            scene.draw_text("Depth (%d, %d): %f" % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))), (20, 60), (1.0, 1.0, 0.0))
-        scene.draw_text(repr(timings), (20, 20), (1.0, 1.0, 0.0))
+        # mouse_x = int(scene.wm.get_mouse_pos()[0])
+        # mouse_y = int(scene.wm.get_mouse_pos()[1])
+        # if 0 < mouse_x < depth_image.width and 0 < mouse_y < depth_image.height:
+        #     scene.draw_text("Depth (%d, %d): %f" % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))), (20, 60), (1.0, 1.0, 0.0))
+        # scene.draw_text(repr(timings), (20, 20), (1.0, 1.0, 0.0))
 
         scene.draw()
 

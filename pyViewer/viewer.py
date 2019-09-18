@@ -721,6 +721,7 @@ class CScene(object):
         self.ctx.enable(mgl.BLEND)
         self.ctx.enable(mgl.DEPTH_TEST)
         self.root.draw(self.perspective, self.camera.camera_matrix, np.eye(4), self.render_mode)
+        self.swap_buffers()
 
     # TODO: Enable camera facing text rendering
     # TODO: Enable 2D text scaling
@@ -901,13 +902,13 @@ class CPointCloud(object):
         if self.vao is None:
             return
 
-        glEnable(GL_VERTEX_PROGRAM_POINT_SIZE)
+        # glEnable(GL_VERTEX_PROGRAM_POINT_SIZE)
         self.prog['Mvp'].value = tuple(np.array(mvp, np.float32).reshape(-1, order='F'))
         self.prog['psize'].value = self.size
         if self.draw_mode is not None:
             mode = self.draw_mode
         self.vao.render(mode)
-        glDisable(GL_VERTEX_PROGRAM_POINT_SIZE)
+        # glDisable(GL_VERTEX_PROGRAM_POINT_SIZE)
 
     def __del__(self):
         if self.data is not None:
@@ -1058,7 +1059,7 @@ class CImage(CGeometry):
         self.texture.filter = (mgl.LINEAR_MIPMAP_LINEAR, mgl.LINEAR)
 
     def draw(self, mvp, mode=mgl.TRIANGLES):
-        glDisable(GL_DEPTH_TEST)
+        self.ctx.disable(mgl.DEPTH_TEST)
         tex_id = np.array(0, np.uint16)
         self.prog['Texture'].value = tex_id
         if self.texture is not None:
@@ -1067,4 +1068,4 @@ class CImage(CGeometry):
         if self.draw_mode is not None:
             mode = self.draw_mode
         self.vao.render(mode)
-        glEnable(GL_DEPTH_TEST)
+        self.ctx.enable(mgl.DEPTH_TEST)
