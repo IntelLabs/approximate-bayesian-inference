@@ -7,12 +7,14 @@ from PIL import Image
 import pygame
 from pygame.locals import DOUBLEBUF, OPENGL, FULLSCREEN
 from pyglfw import pyglfw
+
 from OpenGL.GL import glViewport, glEnable, GL_VERTEX_PROGRAM_POINT_SIZE, glBegin, glEnd, GL_LINES, glVertex3fv, \
-    glColor3fv, glColor3f, glLineWidth, glDisable, GL_LIGHTING, glLoadIdentity, glUseProgram, glLoadMatrixf, GL_DEPTH_TEST, \
-    glMatrixMode, GL_PROJECTION, GL_MODELVIEW, GL_BLEND, glWindowPos2dv, glIsEnabled, glReadPixels, GL_FLOAT, GL_DEPTH_COMPONENT
+    glColor3fv, glColor4fv, glColor3f, glLineWidth, glDisable, GL_LIGHTING, glLoadIdentity, glUseProgram, glLoadMatrixf, GL_DEPTH_TEST, \
+    glMatrixMode, GL_PROJECTION, GL_MODELVIEW, GL_BLEND, glWindowPos2dv, glIsEnabled, glReadPixels, GL_FLOAT, GL_DEPTH_COMPONENT, GL_TEXTURE_2D
 
 from OpenGL.GLUT import glutBitmapCharacter, glutInit
 from OpenGL.GLUT.fonts import GLUT_BITMAP_9_BY_15
+from OpenGL.GLUT.fonts import GLUT_BITMAP_HELVETICA_18
 # from OpenGL.GLU import gluOrtho2D
 
 '''
@@ -185,7 +187,7 @@ class CCamera(object):
         self.focus_point = np.array(focus)
         self.up_vector = np.array(up)
         self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
-        self.sensitivity = 0.02
+        self.sensitivity = 0.01
 
     #TODO: Remove pygame specific keys here
     def process_event(self, event):
@@ -251,7 +253,6 @@ class CCamera(object):
                 pass
 
     def look_at(self, focus=(0, 0, 0), up=(0, 0, 1)):
-
         position = np.array([0.0, 0.0, 0.0])
         alpha = self.alpha
         if alpha > np.pi:
@@ -445,7 +446,9 @@ class CGLFWWindowManager(CWindowManager):
             os.sys.exit(1)
 
         pyglfw.Window.hint(visible=False)
+
         self.window = pyglfw.Window(200, 200, "")
+        # self.window = pyglfw.OpenWindow(1440, 900, 8, 8, 8, 0, 24, 0, pyglfw.api.FULLSCREEN)
         self.window.make_current()
         self.window.show()
         self.window.set_key_callback(CGLFWWindowManager.key_callback)
@@ -471,8 +474,8 @@ class CGLFWWindowManager(CWindowManager):
             ev.type = CEvent.KEYUP
         if action == pyglfw.api.GLFW_PRESS:
             ev.type = CEvent.KEYDOWN
-
         ev.data = (key, scancode, mods)
+        ev.key = key
         self.event_queue.append(ev)
         print("keybrd: key=%s scancode=%s action=%s mods=%s" % (key, scancode, action, mods))
 
@@ -718,7 +721,6 @@ class CScene(object):
         self.ctx.enable(mgl.BLEND)
         self.ctx.enable(mgl.DEPTH_TEST)
         self.root.draw(self.perspective, self.camera.camera_matrix, np.eye(4), self.render_mode)
-        # self.swap_buffers()
 
     # TODO: Enable camera facing text rendering
     # TODO: Enable 2D text scaling
@@ -727,7 +729,8 @@ class CScene(object):
         if not self.glut_init:
             glutInit()
             self.glut_init = True
-
+        glDisable(GL_DEPTH_TEST)
+        glDisable(GL_TEXTURE_2D)
         glColor3fv(color)
         glWindowPos2dv(position[0:2])
         for ch in text:
@@ -735,7 +738,10 @@ class CScene(object):
                 position[1] = position[1] - line_height
                 glWindowPos2dv(position[0:2])
             else:
-                glutBitmapCharacter(GLUT_BITMAP_9_BY_15, ord(ch))
+                # glutBitmapCharacter(GLUT_BITMAP_9_BY_15, ord(ch))
+                glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, ord(ch))
+
+        glEnable(GL_DEPTH_TEST)
 
     def draw_line(self, a, b, color, thickness):
         # pa = np.matmul(np.append(a, 1).reshape(1,-1), np.matmul(self.perspective, self.camera.camera_matrix).transpose())
@@ -756,6 +762,7 @@ class CScene(object):
         glVertex3fv(b)
         glEnd()
         glEnable(GL_LIGHTING)
+        glDisable(GL_DEPTH_TEST)
         # line = CPointCloud(self.ctx)
         # line.draw_mode = mgl.LINE_STRIP
         # line.set_data(np.concatenate((a, color, b, color)))
@@ -879,13 +886,21 @@ class CPointCloud(object):
     def set_data(self, data):
         if self.vbo is not None:
             self.vbo.release()
+            self.vbo = None
         if self.vao is not None:
             self.vao.release()
+            self.vao = None
+
         self.data = data
-        self.vbo = self.ctx.buffer(data)
-        self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
+
+        if data is not None:
+            self.vbo = self.ctx.buffer(data)
+            self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
 
     def draw(self, mvp, mode=mgl.POINTS):
+        if self.vao is None:
+            return
+
         glEnable(GL_VERTEX_PROGRAM_POINT_SIZE)
         self.prog['Mvp'].value = tuple(np.array(mvp, np.float32).reshape(-1, order='F'))
         self.prog['psize'].value = self.size
@@ -1027,6 +1042,9 @@ class CImage(CGeometry):
 
         elif isinstance(image, str):
             texture_image = Image.open(image).transpose(Image.FLIP_TOP_BOTTOM).convert('RGBA')
+            texture_image_data = texture_image.tobytes()
+        elif isinstance(image, np.ndarray):
+            texture_image = PIL.Image.fromarray(image).transpose(Image.FLIP_TOP_BOTTOM).convert('RGBA')
             texture_image_data = texture_image.tobytes()
         else:
             raise Exception("Unable to interpret texture type. Required a PIL.Image or a path to an image. Got " + str(type(image)))
