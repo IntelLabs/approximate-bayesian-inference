@@ -1,7 +1,7 @@
+import pyViewer
 import numpy as np
 import pybullet as p
 import cv2
-
 
 def draw_line(a, b, color=[1, 0, 0, 1], width=1, lifetime=0, physicsClientId=0, img=None, camera=None):
     if img is not None and camera is not None:
@@ -13,7 +13,14 @@ def draw_line(a, b, color=[1, 0, 0, 1], width=1, lifetime=0, physicsClientId=0, 
         cv2.line(img=img, pt1=tuple(a_img.reshape(-1).astype(int)), pt2=tuple(b_img.reshape(-1).astype(int)),
                  color=clr, thickness=width)
 
-    return p.addUserDebugLine(a, b, color, width, lifetime, physicsClientId=physicsClientId)
+    if isinstance(physicsClientId, pyViewer.CScene):
+        physicsClientId.draw_line(np.array(a, np.float32),
+                                  np.array(b, np.float32),
+                                  color=np.array(color, np.float32),
+                                  thickness=width)
+
+    elif physicsClientId is not None:
+        return p.addUserDebugLine(a, b, color, width, lifetime, physicsClientId=physicsClientId)
 
 
 def draw_point(pt, color=[1, 0, 0], size=0.1, width=1, lifetime=0, physicsClientId=0, img=None, camera=None):
@@ -126,8 +133,19 @@ def draw_point_cloud(points, colors, physicsClientId=0, size=0.1, width=1, img=N
 
     obj_ids = []
 
-    for i in range(len(points)):
-        draw_point(pt=points[i], color=colors[i], size=size, width=width,
-                   physicsClientId=physicsClientId, img=img, camera=camera)
+    if isinstance(physicsClientId, pyViewer.CScene):
+        pts = np.array(points[:,0:3], np.float32).reshape(-1, 3)
+        cols = np.array(colors, np.float32).reshape(-1, 4)
+        pc = pyViewer.CPointCloud(ctx=physicsClientId.ctx)
+        pc.size = size
+        pc_data = np.hstack((pts, cols))
+        pc.set_data(pc_data.reshape(-1))
+        pc.draw(np.matmul(physicsClientId.perspective, physicsClientId.camera.camera_matrix))
+        pc.__del__()
 
-    return obj_ids
+    elif physicsClientId is not None:
+        for i in range(len(points)):
+            draw_point(pt=points[i], color=colors[i], size=size, width=width,
+                       physicsClientId=physicsClientId, img=img, camera=camera)
+
+        return obj_ids

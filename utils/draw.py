@@ -3,8 +3,6 @@ import pybullet as p
 import matplotlib.cm as cm  # for the colormap
 import copy
 
-import pyViewer.viewer as pyViewer
-
 
 def get_heat_color(f):
     res = cm.hot(f)
@@ -15,14 +13,7 @@ def draw_line(a, b, color=[1, 0, 0, 1], width=1, lifetime=0, physicsClientId=0, 
     if physicsClientId is None:
         return
 
-    if isinstance(physicsClientId, pyViewer.CScene):
-        physicsClientId.draw_line(np.array(a, np.float32),
-                                  np.array(b, np.float32),
-                                  color=np.array(color, np.float32),
-                                  thickness=width)
-
-    elif physicsClientId is not None:
-        return p.addUserDebugLine(a, b, color[:3], width, lifetime, physicsClientId=physicsClientId)
+    return p.addUserDebugLine(a, b, color[:3], width, lifetime, physicsClientId=physicsClientId)
 
 
 def draw_point(pt, color=[1, 0, 0], size=0.1, width=1, lifetime=0, physicsClientId=0, img=None, camera=None):
@@ -59,10 +50,7 @@ def draw_text(text, position, visualizer, color=(1,1,1)):
     if visualizer is None:
         return
 
-    if isinstance(visualizer, pyViewer.CScene):
-        visualizer.draw_text(text, position, color)
-    elif visualizer is not None:
-        return p.addUserDebugText(text, textPosition=position, physicsClientId=visualizer, color=color)
+    return p.addUserDebugText(text, textPosition=position, physicsClientId=visualizer, color=color)
 
 
 def draw_trajectory_cov(traj, cov, color_traj=[1, 0, 0], width=1, lifetime=0, physicsClientId=0, color_cov=[1, 0, 0]):
@@ -161,22 +149,11 @@ def draw_point_cloud(points, colors, physicsClientId=0, size=0.01, width=1, img=
 
     obj_ids = []
 
-    if isinstance(physicsClientId, pyViewer.CScene):
-        pts = np.array(points, np.float32).reshape(-1, 3)
-        cols = np.array(colors, np.float32).reshape(-1, 4)
-        pc = pyViewer.CPointCloud(ctx=physicsClientId.ctx)
-        pc.size = size
-        pc_data = np.hstack((pts, cols))
-        pc.set_data(pc_data.reshape(-1))
-        pc.draw(np.matmul(physicsClientId.perspective, physicsClientId.camera.camera_matrix))
-        pc.__del__()
+    for i in range(len(points)):
+        draw_point(pt=points[i], color=colors[i], size=size, width=width,
+                   physicsClientId=physicsClientId, img=img, camera=camera)
 
-    elif physicsClientId is not None:
-        for i in range(len(points)):
-            draw_point(pt=points[i], color=colors[i], size=size, width=width,
-                       physicsClientId=physicsClientId, img=img, camera=camera)
-
-        return obj_ids
+    return obj_ids
 
 
 def draw_samples(samples, weights, visualizer, width=1):

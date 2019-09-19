@@ -1,22 +1,34 @@
 import numpy as np
 import pybullet as p
-import cv2
+import matplotlib.cm as cm  # for the colormap
+import copy
+
+import pyViewer.viewer as pyViewer
+
+
+def get_heat_color(f):
+    res = cm.hot(f)
+    return res
 
 
 def draw_line(a, b, color=[1, 0, 0, 1], width=1, lifetime=0, physicsClientId=0, img=None, camera=None):
-    if img is not None and camera is not None:
-        a_img, jac = cv2.projectPoints(np.array([a]), camera.rvec, camera.tvec, camera.intrinsics, distCoeffs=None)
-        b_img, jac = cv2.projectPoints(np.array([b]), camera.rvec, camera.tvec, camera.intrinsics, distCoeffs=None)
+    if physicsClientId is None:
+        return
 
-        clr = ( int(color[2]*255), int(color[1]*255), int(color[0]*255) )
+    if isinstance(physicsClientId, pyViewer.CScene):
+        physicsClientId.draw_line(np.array(a, np.float32),
+                                  np.array(b, np.float32),
+                                  color=np.array(color, np.float32),
+                                  thickness=width)
 
-        cv2.line(img=img, pt1=tuple(a_img.reshape(-1).astype(int)), pt2=tuple(b_img.reshape(-1).astype(int)),
-                 color=clr, thickness=width)
-
-    return p.addUserDebugLine(a, b, color, width, lifetime, physicsClientId=physicsClientId)
+    elif physicsClientId is not None:
+        return p.addUserDebugLine(a, b, color[:3], width, lifetime, physicsClientId=physicsClientId)
 
 
 def draw_point(pt, color=[1, 0, 0], size=0.1, width=1, lifetime=0, physicsClientId=0, img=None, camera=None):
+    if physicsClientId is None:
+        return
+
     res = []
     lxa = [pt[0] - (size / 2), pt[1], pt[2]]
     lxb = [pt[0] + (size / 2), pt[1], pt[2]]
@@ -31,6 +43,9 @@ def draw_point(pt, color=[1, 0, 0], size=0.1, width=1, lifetime=0, physicsClient
 
 
 def draw_trajectory(traj, color=[1, 0, 0], width=1, lifetime=0, physicsClientId=0, draw_points=True, img=None, camera=None):
+    if physicsClientId is None:
+        return
+
     lines = []
     for i in range(1, int(len(traj))):
         lines.append(draw_line(traj[i-1][0:3], traj[i][0:3], color, width, lifetime, physicsClientId, img=img, camera=camera))
@@ -40,11 +55,20 @@ def draw_trajectory(traj, color=[1, 0, 0], width=1, lifetime=0, physicsClientId=
     return lines
 
 
-def draw_text(text, position, visualizer):
-    return p.addUserDebugText(text, textPosition=position, physicsClientId=visualizer)
+def draw_text(text, position, visualizer, color=(1,1,1)):
+    if visualizer is None:
+        return
+
+    if isinstance(visualizer, pyViewer.CScene):
+        visualizer.draw_text(text, position, color)
+    elif visualizer is not None:
+        return p.addUserDebugText(text, textPosition=position, physicsClientId=visualizer, color=color)
 
 
 def draw_trajectory_cov(traj, cov, color_traj=[1, 0, 0], width=1, lifetime=0, physicsClientId=0, color_cov=[1, 0, 0]):
+    if physicsClientId is None:
+        return
+
     num_labels = 10
 
     traj = traj.view(-1, 3).detach()
@@ -76,19 +100,24 @@ def draw_trajectory_cov(traj, cov, color_traj=[1, 0, 0], width=1, lifetime=0, ph
         if (i % label_gap) == 0 and len(traj[i]) > 3:
             lines.append(p.addUserDebugText("%.3f" % traj[i][3], textPosition=traj[i][0:3]))
 
-
     return lines
 
 
 def draw_trajectory_diff(t1, t2, color=[1, 0, 0], width=1, lifetime=0, physicsClientId=0):
+    if physicsClientId is None:
+        return
+
     lines = []
 
-    for i in range(0, len(t1), 3):
-        lines.append(draw_line(t1[i:i+3], t2[i:i+3], color, width, lifetime, physicsClientId))
+    for i in range(min(len(t1), len(t2))):
+        lines.append(draw_line(t1[i], t2[i], color, width, lifetime, physicsClientId))
     return lines
 
 
 def draw_arrow(a, b, color=[1, 0, 0], width=1, lifetime=0, physicsClientId=0):
+    if physicsClientId is None:
+        return
+
     obj_ids = []
     a = np.array(a)
     b = np.array(b)
@@ -99,7 +128,10 @@ def draw_arrow(a, b, color=[1, 0, 0], width=1, lifetime=0, physicsClientId=0):
 
 
 def draw_box(a, b, color=[1, 0, 0], width=1, lifetime=0, physicsClientId=0):
-    obj_ids = []
+    if physicsClientId is None:
+        return
+
+    obj_ids = list()
 
     obj_ids.append(draw_line([a[0], a[1], a[2]], [a[0], a[1], b[2]], color, width, lifetime, physicsClientId=physicsClientId))
     obj_ids.append(draw_line([a[0], a[1], a[2]], [a[0], b[1], a[2]], color, width, lifetime, physicsClientId=physicsClientId))
@@ -121,13 +153,39 @@ def draw_box(a, b, color=[1, 0, 0], width=1, lifetime=0, physicsClientId=0):
     return obj_ids
 
 
-def draw_point_cloud(points, colors, physicsClientId=0, size=0.1, width=1, img=None, camera=None):
+def draw_point_cloud(points, colors, physicsClientId=0, size=0.01, width=1, img=None, camera=None):
+    if physicsClientId is None:
+        return
+
     assert len(points) == len(colors)
 
     obj_ids = []
 
-    for i in range(len(points)):
-        draw_point(pt=points[i], color=colors[i], size=size, width=width,
-                   physicsClientId=physicsClientId, img=img, camera=camera)
+    if isinstance(physicsClientId, pyViewer.CScene):
+        pts = np.array(points, np.float32).reshape(-1, 3)
+        cols = np.array(colors, np.float32).reshape(-1, 4)
+        pc = pyViewer.CPointCloud(ctx=physicsClientId.ctx)
+        pc.size = size
+        pc_data = np.hstack((pts, cols))
+        pc.set_data(pc_data.reshape(-1))
+        pc.draw(np.matmul(physicsClientId.perspective, physicsClientId.camera.camera_matrix))
+        pc.__del__()
 
-    return obj_ids
+    elif physicsClientId is not None:
+        for i in range(len(points)):
+            draw_point(pt=points[i], color=colors[i], size=size, width=width,
+                       physicsClientId=physicsClientId, img=img, camera=camera)
+
+        return obj_ids
+
+
+def draw_samples(samples, weights, visualizer, width=1):
+    if visualizer is None:
+        return
+    n_samples = len(samples)
+    idx = np.argmax(weights)
+    idx_slack = int(idx / n_samples)
+    weights = copy.deepcopy(weights[idx_slack * n_samples:idx_slack * n_samples + n_samples])
+    weights = (weights - np.min(weights)) / (np.max(weights) - np.min(weights))
+    colors = get_heat_color(weights)
+    draw_point_cloud(samples, colors, physicsClientId=visualizer, size=width)
