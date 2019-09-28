@@ -9,7 +9,8 @@ class CObservationModelDataset(CBaseObservationModel):
         self.n_points = params["sample_rate"] * params["episode_time"]
 
         self.dataset = CReachingDataset(filename=params["dataset_path"], dataset_sample_rate=params["sample_rate"],
-                                        output_sample_rate=params["sample_rate"], noise_sigma=params["sigma"])
+                                        output_sample_rate=params["sample_rate"], noise_sigma=params["sigma"],
+                                        n_datapoints=params["num_trajs"])
         self.min_points = params["min_points"]
         self.dimensions = params["obs_dimensions"]
         self.new_trajectory()

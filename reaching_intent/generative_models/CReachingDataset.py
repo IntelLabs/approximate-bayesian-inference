@@ -6,22 +6,27 @@ from utils.misc import resample_trajectory
 
 
 class CReachingDataset(CDataset):
-    def __init__(self, filename, noise_sigma=0.0, dataset_sample_rate=30, output_sample_rate=30, ndims=3):
+    def __init__(self, filename, noise_sigma=0.0, dataset_sample_rate=30, output_sample_rate=30, ndims=3, n_datapoints=-1):
         # super(CReachingDataset, self).__init__(filename) # Parent constructor not called intentionally.
         self.filename = filename
         self.samples = list()
         self.x_samples = t_tensor([])  # Input values
         self.y_samples = t_tensor([])  # Output values
-        self.dataset_load(noise_sigma, ndims, dataset_sample_rate, output_sample_rate)
+        self.dataset_load(noise_sigma, ndims, dataset_sample_rate, output_sample_rate, n_datapoints=n_datapoints)
 
     def dataset_load(self, noise_sigma=0.001, ndims=3, dataset_sample_rate=30, output_sample_rate=30,
-                     prefix_samples=4, trajectory_duration=5.0):
+                     prefix_samples=4, trajectory_duration=5.0, n_datapoints=-1):
 
         try:
             file = open(self.filename, 'r')
         except FileNotFoundError:
             return self.samples
-        lines = file.readlines()
+        lines = list()
+        if n_datapoints == -1:
+            lines = file.readlines()
+        else:
+            for _ in range(n_datapoints):
+                lines.append(file.readline())
 
         # Load samples into two batched tensors of inputs and outputs
         for l in lines:

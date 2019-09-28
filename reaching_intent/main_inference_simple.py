@@ -31,6 +31,7 @@ if __name__ == "__main__":
     #################################################################################
     # LATENT and NUISANCE SPACES
     #################################################################################
+    print("Set latent and nuisance spaces.")
     # Generative model parameter limits: start volume (x,y,z), end volume (x,y,z), controller(Kp,Ki,Kd,Krep,iClamp)
     param_limits_min = t_tensor([-0.05, 0.30, -0.10, 0.25, -0.4, 0.20, 5, 0.005, 0, 0.10, 20])
     param_limits_max = t_tensor([-0.04, 0.31, -0.09, 0.90, 0.4, 0.21, 20, 0.010, 0, 0.11, 30])
@@ -59,6 +60,7 @@ if __name__ == "__main__":
     #################################################################################
     # GENERATIVE MODEL SIMULATOR
     #################################################################################
+    print("Load generative model: Simulator")
     # General parameters
     simulator_params = create_sim_params(sim_viz=sim_viz)
     gen_model_sim = CGenerativeModelSimulator(simulator_params)
@@ -69,6 +71,7 @@ if __name__ == "__main__":
     #################################################################################
     # GENERATIVE MODEL NEURAL EMULATOR
     #################################################################################
+    print("Load generative model: Neural Surrogate")
     nn_model_path = "pytorch_models/test10k_gpu_MSE_2.pt"
     gen_model_neural_emulator = CGenerativeModelNeuralEmulator(nn_model_path)
     #################################################################################
@@ -87,11 +90,13 @@ if __name__ == "__main__":
     #################################################################################
     # OBSERVATION MODEL
     #################################################################################
+    print("Prepare observation model")
     observer_params = copy.deepcopy(simulator_params)
     observer_params["sigma"] = 0.001  # Additional gaussian noise added to observed trajectories
     observer_params["dataset_path"] = "./datasets/default.dat"
     observer_params["min_points"] = 3
     observer_params["obs_dimensions"] = 3
+    observer_params["num_trajs"] = 100
     obs_model = CObservationModelDataset(observer_params)
     #################################################################################
     #################################################################################
