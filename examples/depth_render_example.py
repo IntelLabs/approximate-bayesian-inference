@@ -1,11 +1,16 @@
 #!/usr/bin/python3
 import os
 import time
-from matplotlib import cm
+try:
+    from matplotlib import cm
+    matplotlib_enabled=True
+except ModuleNotFoundError:
+    matplotlib_enabled=False
+
 from PIL import Image
 import numpy as np
 
-import pyViewer.transformations as tf
+import transformations as tf
 from pyViewer.viewer import CScene, CNode, CTransform, COffscreenWindowManager, CGLFWWindowManager
 from pyViewer.geometry_makers import make_mesh
 
@@ -90,6 +95,10 @@ if __name__ == "__main__":
 
     # Convert images with a colormap and save
     for i, img in enumerate(images):
-        image_cm = np.uint8(cm.viridis(img / max_dist) * 255)
-        pil_image = Image.frombytes("RGBA", img.shape, image_cm)
+        if matplotlib_enabled:
+            image_cm = np.uint8(cm.viridis(img / max_dist) * 255)
+            pil_image = Image.frombytes("RGBA", img.shape, image_cm)
+        else:
+            image_cm = np.uint8((img / max_dist) * 255)
+            pil_image = Image.frombytes("L", img.shape, image_cm)
         pil_image.save("../depth_images/depth_%d.png" % i, "PNG")

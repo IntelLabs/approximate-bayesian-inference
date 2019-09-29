@@ -1,6 +1,6 @@
 import os
 import numpy as np
-import pyViewer.transformations as tf
+import transformations as tf
 import moderngl as mgl
 import PIL
 from PIL import Image

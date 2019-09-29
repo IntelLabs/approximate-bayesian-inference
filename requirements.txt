@@ -3,5 +3,6 @@ pywavefront
 moderngl
 pyopengl
 pygame
-pybullet
-Pillow
+pillow
+pyglfw
+transformations

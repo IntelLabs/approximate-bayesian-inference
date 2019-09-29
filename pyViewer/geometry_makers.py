@@ -1,6 +1,20 @@
 import numpy as np
 import pywavefront as pyobj
 from pyViewer.viewer import CGeometry
+from pyViewer.viewer import CNode
+from pyViewer.viewer import CTransform
+import transformations as tf
+
+
+def make_objects(ctx, object_paths, object_poses):
+    nodes = []
+    for path, pose in zip(object_paths, object_poses):
+        nodes.append(
+            CNode(geometry=make_mesh(ctx, path, scale=1.0),
+                  transform=CTransform(tf.compose_matrix(translate=pose[0:3], angles=pose[3:])))
+        )
+
+    return nodes
 
 
 def extract_vertex_data(mat, out_format="V3F_N3F_T2F_C4F", scale=1.0):
