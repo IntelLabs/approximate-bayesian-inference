@@ -233,11 +233,13 @@ class CCamera(object):
                 print("Camera: a:", self.alpha, " b:", self.beta, " r:", self.r)
 
         if event.type == CEvent.MOUSEBUTTONDOWN:
-            if event.data[1] == 4:
+            if event.data is None:
+                pass
+            elif event.data[1] == 4:
                 self.r = self.r - 0.1
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
                 print("Camera: a:", self.alpha, " b:", self.beta, " r:", self.r)
-            if event.data[1] == 5:
+            elif event.data[1] == 5:
                 self.r = self.r + 0.1
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
                 print("Camera: a:", self.alpha, " b:", self.beta, " r:", self.r)

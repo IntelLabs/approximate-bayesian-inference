@@ -8,8 +8,8 @@ from pyViewer.viewer import CScene, CPointCloud, CNode, CTransform, CEvent, CIma
 from pyViewer.geometry_makers import make_mesh, make_objects
 from pyViewer.models import REFERENCE_FRAME_MESH, FLOOR_MESH
 
-os.environ["MESA_GL_VERSION_OVERRIDE"] = "3.3"
-os.environ["MESA_GLSL_VERSION_OVERRIDE"] = "330"
+# os.environ["MESA_GL_VERSION_OVERRIDE"] = "3.3"
+# os.environ["MESA_GLSL_VERSION_OVERRIDE"] = "330"
 
 
 def interactive_example():
@@ -24,7 +24,7 @@ def interactive_example():
     upper = np.array([0.7, 0.4, 0.25, np.pi, np.pi, np.pi])
     object_pool_path = ["../models/duck/duck_vhacd.obj", "../models/intel_cup/intel_cup.obj"]
     for i in range(n_targets):
-        objects_path.append(object_pool_path[np.random.random_integers(0, len(object_pool_path)-1)])
+        objects_path.append(object_pool_path[np.random.randint(0, len(object_pool_path)-1)])
         objects_pose.append(np.random.uniform(lower, upper))
 
     #####################################################
@@ -47,16 +47,16 @@ def interactive_example():
     pcnode.geom.set_data(pcdata)
     scene.insert_graph([pcnode])
 
+    # Object nodes
+    object_nodes = make_objects(scene.ctx, objects_path, objects_pose)
+    scene.insert_graph(object_nodes)
+
     # Example image node
     image_display = CImage(scene.ctx)
     image_display.set_texture("../textures/intel_labs.png")
     image_display.set_position((-1, 0.6), (0.4, 0.4))
     imgnode = CNode(geometry=image_display)
     scene.insert_graph([imgnode])
-
-    # Object nodes
-    object_nodes = make_objects(scene.ctx, objects_path, objects_pose)
-    scene.insert_graph(object_nodes)
 
     #####################################################
     # Main Loop
@@ -89,7 +89,7 @@ def interactive_example():
         # scene.camera.camera_matrix = scene.camera.look_at(scene.camera.focus_point, scene.camera.up_vector)
         depth_image = scene.get_depth_image()
         # image_cm = np.uint8(cm.viridis(depth_image/scene.far) * 255.0)
-        image_bw = np.uint8((depth_image / 10.0) * 255)
+        image_bw = np.uint8(np.clip((depth_image / 3.0) * 255, 0, 255))
         texture_image = Image.frombytes("L", depth_image.shape, image_bw)
         # texture_image = Image.frombytes("RGBA", depth_image.shape, image_cm)
         image_display.set_texture(texture_image)
