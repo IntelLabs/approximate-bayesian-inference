@@ -3,7 +3,7 @@ import numpy as np
 import transformations as tf
 import moderngl as mgl
 import PIL
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import pygame
 from pygame.locals import DOUBLEBUF, OPENGL, FULLSCREEN
 from pyglfw import pyglfw
@@ -637,7 +637,7 @@ class CScene(object):
 
         self.perspective = np.matmul(ndc_matrix, proj_matrix)
 
-        self.glut_init = False
+        self.font = ImageFont.truetype("../fonts/FiraCode-Medium.ttf", 28)
 
     # def __del__(self):
     #     self.fbo.release()
@@ -774,25 +774,32 @@ class CScene(object):
         self.ctx.enable(mgl.DEPTH_TEST)
         self.root.draw(self.perspective, camera.camera_matrix, np.eye(4), self.render_mode)
 
+    def set_font(self, font_path="../fonts/FiraCode-Medium.ttf", font_size=28):
+        self.font = ImageFont.truetype(font_path, font_size)
+
     # TODO: Enable camera facing text rendering
-    # TODO: Enable 2D text scaling
-    # TODO: Avoid direct mode calls
-    def draw_text(self, text, pos, color=(1, 1, 1), line_height=20):
-        position = list(pos[0:2])
-        if not self.glut_init:
-            glutInit()
-            self.glut_init = True
+    # TODO: Improve efficiency. Maybe pre-render the font on a texture and create a quad per letter
+    # TODO: BUG: Background color alpha not working
+    def draw_text(self, text, pos, color=(1, 1, 1, 1), background_color=None):
+        image_display = CImage(self.ctx)
+        text_width, text_height = self.font.getsize(text)
+        (width, baseline), (offset_x, offset_y) = self.font.font.getsize(text)
 
-        glColor3fv(color)
-        glWindowPos2dv(position[0:2])
-        for ch in text:
-            if ch == '\n':
-                position[1] = position[1] - line_height
-                glWindowPos2dv(position[0:2])
-            else:
-                glutBitmapCharacter(GLUT_BITMAP_9_BY_15, ord(ch))
+        # Convert the pos in pixels to NDC
+        pos_ndc = (pos[0] / self.width * 2 - 1, pos[1] / self.height * 2 - 1)
+        size_ndc = (text_width / self.width, text_height / self.height)
+        image_display.set_position(pos_ndc, size_ndc)
 
-    def draw_line(self, a, b, color, thickness, write_on_depth_buffer=False):
+        if background_color is not None:
+            PIL_image = Image.new('RGBA', (text_width - offset_x, text_height - offset_y), color=tuple((np.array(background_color)*255).astype(np.uint8)))
+        else:
+            PIL_image = Image.new('RGBA', (text_width - offset_x, text_height - offset_y), color=(0, 0, 0, 0))
+        draw = ImageDraw.Draw(PIL_image)
+        draw.text((-offset_x, -offset_y), text, font=self.font, fill=tuple((np.array(color)*255).astype(np.uint8)))
+        image_display.set_texture(PIL_image.transpose(Image.FLIP_TOP_BOTTOM))
+        image_display.draw(None)
+
+    def draw_line(self, a, b, color, thickness, write_on_depth_buffer=True):
         if not write_on_depth_buffer:
             self.ctx.disable(mgl.DEPTH_TEST)
 
@@ -1040,7 +1047,7 @@ class CImage(CGeometry):
         self.texture = None
         self.offset = (0.0, 0.0)
         self.size = (1.0, 1.0)
-        self.color = np.array((0, 0, 0, 1), np.float32)
+        self.color = np.array((0, 0, 0, 0), np.float32)
 
     def set_position(self, offset, size):
         if self.vbo is not None:

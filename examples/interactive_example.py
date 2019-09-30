@@ -62,6 +62,7 @@ def interactive_example():
     #####################################################
     # Main Loop
     #####################################################
+    depth_image = scene.get_depth_image()
     timings = dict()
     is_done = False
     while not is_done:
@@ -76,14 +77,29 @@ def interactive_example():
             scene.process_event(event)
 
         tic = time.time()
-        # TODO: Fix the draw line shader
 
         scene.clear()
+        # Draw scene
         scene.draw()
-        scene.draw_line(np.array([0, 0, 0], np.float32), np.array([1, 1, 1], np.float32), np.array([1, 0, 0, 1], np.float32), 5)
-        scene.swap_buffers()
 
         timings["draw"] = time.time() - tic
+
+        # Draw debug items before swap buffers (lines)
+        scene.draw_line(np.array([0, 0, 0], np.float32), np.array([1, 1, 1], np.float32), np.array([1, 0, 0, 1], np.float32), 5)
+
+        tic = time.time()
+        # Draw debug items before swap buffers (text)
+        # TODO: BUG. If the text draw is not called inmediately before a scene.draw() the color does not work
+        # mouse_x = int(scene.wm.get_mouse_pos()[0])
+        # mouse_y = int(scene.wm.get_mouse_pos()[1])
+        # if 0 < mouse_x < depth_image.width and 0 < mouse_y < depth_image.height:
+        #     scene.draw_text("Depth (%d, %d): %f" % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))), (20, 60), (1.0, 1.0, 0.0))
+        #     print("Depth (%d, %d): %f" % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))))
+        scene.draw_text(repr(timings), (20, 20), color=(1.0, 1.0, 0.0, 1.0), background_color=(0, 0, 1, 0))
+        timings["text"] = time.time() - tic
+
+        scene.swap_buffers()
+
 
         tic = time.time()
         # scene.camera.alpha = time.time() * 0.2
@@ -98,16 +114,6 @@ def interactive_example():
         # Flip depth image to match screen coordinates
         depth_image = Image.frombytes("F", depth_image.shape, depth_image).transpose(Image.FLIP_TOP_BOTTOM)
         timings["read_depth"] = time.time() - tic
-
-        # TODO: BUG. If the text draw is not called inmediately before a scene.draw() the color does not work
-        # mouse_x = int(scene.wm.get_mouse_pos()[0])
-        # mouse_y = int(scene.wm.get_mouse_pos()[1])
-        # if 0 < mouse_x < depth_image.width and 0 < mouse_y < depth_image.height:
-            # TODO: Fix direct mode calls in text rendering
-            # scene.draw_text("Depth (%d, %d): %f" % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))), (20, 60), (1.0, 1.0, 0.0))
-            # print("Depth (%d, %d): %f" % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))))
-        # TODO: Fix direct mode calls in text rendering
-        # scene.draw_text(repr(timings), (20, 20), (1.0, 1.0, 0.0))
 
         timings["all"] = time.time() - t_ini
         print(timings)
