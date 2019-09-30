@@ -62,7 +62,7 @@ def interactive_example():
     #####################################################
     # Main Loop
     #####################################################
-    depth_image = scene.get_depth_image()
+    depth_image = None
     timings = dict()
     is_done = False
     while not is_done:
@@ -89,12 +89,12 @@ def interactive_example():
 
         tic = time.time()
         # Draw debug items before swap buffers (text)
-        # TODO: BUG. If the text draw is not called inmediately before a scene.draw() the color does not work
-        # mouse_x = int(scene.wm.get_mouse_pos()[0])
-        # mouse_y = int(scene.wm.get_mouse_pos()[1])
-        # if 0 < mouse_x < depth_image.width and 0 < mouse_y < depth_image.height:
-        #     scene.draw_text("Depth (%d, %d): %f" % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))), (20, 60), (1.0, 1.0, 0.0))
-        #     print("Depth (%d, %d): %f" % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))))
+        mouse_x = int(scene.wm.get_mouse_pos()[0])
+        mouse_y = int(scene.wm.get_mouse_pos()[1])
+        if depth_image is not None:
+            if 0 < mouse_x < depth_image.width and 0 < mouse_y < depth_image.height:
+                scene.draw_text("Depth (%d, %d): %.3f" % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))), (20, 60), (1.0, 1.0, 0.0))
+                # print(" Depth (%d, %d): %.3f " % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))))
         scene.draw_text(repr(timings), (20, 20), color=(1.0, 1.0, 0.0, 1.0), background_color=(0, 0, 1, 0))
         timings["text"] = time.time() - tic
 
