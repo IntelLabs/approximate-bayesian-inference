@@ -75,6 +75,7 @@ def pybullet_example():
     # Main Loop
     #####################################################
     timings = dict()
+    depth_image = None
     while pb.isConnected(physicsClientId=sim_id):
         pcdata = np.random.rand(100000 * 7).astype(np.float32)
         pcnode.geom.set_data(pcdata)
@@ -99,7 +100,20 @@ def pybullet_example():
 
         scene.clear()
         scene.draw()
+        # Draw debug items before swap buffers (lines)
         scene.draw_line(np.array([0, 0, 0], np.float32), np.array([1, 1, 1], np.float32), np.array([1, 0, 0, 1], np.float32), 5)
+
+        tic = time.time()
+        # Draw debug items before swap buffers (text)
+        mouse_x = int(scene.wm.get_mouse_pos()[0])
+        mouse_y = int(scene.wm.get_mouse_pos()[1])
+        if depth_image is not None:
+            if 0 < mouse_x < depth_image.width and 0 < mouse_y < depth_image.height:
+                scene.draw_text("Depth (%d, %d): %.3f" % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))), (20, 60), (1.0, 1.0, 0.0))
+                # print(" Depth (%d, %d): %.3f " % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))))
+        scene.draw_text(repr(timings), (20, 20), color=(1.0, 1.0, 0.0, 1.0), background_color=(0, 0, 1, 1))
+        timings["text"] = time.time() - tic
+
         scene.swap_buffers()
 
         timings["draw"] = time.time() - tic
@@ -123,13 +137,6 @@ def pybullet_example():
         # depth_image = np.flip(depth_image.reshape(depth_shape, order="F"), 1)
         timings["read_depth"] = time.time() - tic
 
-        # TODO: BUG. If the text draw is not called inmediately before a scene.draw() the color does not work
-        mouse_x = int(scene.wm.get_mouse_pos()[0])
-        mouse_y = int(scene.wm.get_mouse_pos()[1])
-        if 0 < mouse_x < depth_image.width and 0 < mouse_y < depth_image.height:
-            scene.draw_text("Depth (%d, %d): %f" % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))), (20, 60), (1.0, 1.0, 0.0))
-            print("Depth (%d, %d): %f" % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))))
-        scene.draw_text(repr(timings), (20, 20), (1.0, 1.0, 0.0))
         timings["all"] = time.time() - t_ini
         # print(timings)
 
