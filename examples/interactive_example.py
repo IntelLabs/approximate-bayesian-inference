@@ -100,7 +100,6 @@ def interactive_example():
 
         scene.swap_buffers()
 
-
         tic = time.time()
         # scene.camera.alpha = time.time() * 0.2
         # scene.camera.camera_matrix = scene.camera.look_at(scene.camera.focus_point, scene.camera.up_vector)

@@ -7,13 +7,6 @@ from PIL import Image, ImageDraw, ImageFont
 import pygame
 from pygame.locals import DOUBLEBUF, OPENGL, FULLSCREEN
 from pyglfw import pyglfw
-from OpenGL.GL import glViewport, glEnable, GL_VERTEX_PROGRAM_POINT_SIZE, glBegin, glEnd, GL_LINES, glVertex3fv, \
-    glColor3fv, glColor3f, glLineWidth, glDisable, GL_LIGHTING, glLoadIdentity, glUseProgram, glLoadMatrixf, GL_DEPTH_TEST, \
-    glMatrixMode, GL_PROJECTION, GL_MODELVIEW, GL_BLEND, glWindowPos2dv, glIsEnabled, glReadPixels, GL_FLOAT, GL_DEPTH_COMPONENT
-
-from OpenGL.GLUT import glutBitmapCharacter, glutInit
-from OpenGL.GLUT.fonts import GLUT_BITMAP_9_BY_15
-# from OpenGL.GLU import gluOrtho2D
 
 '''
 REQUIREMENTS
@@ -26,10 +19,8 @@ pip install pybullet            # Only needed for pybullet integration
 TODO:
 - Shadows
 - Fix lighting?
-- Text on window
 - Floating text
 - Primitive geometry makers
-- Remove transformations.py dependency
 
 - GUI
     - Screenshot button
