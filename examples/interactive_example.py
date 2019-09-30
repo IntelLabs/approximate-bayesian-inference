@@ -95,7 +95,7 @@ def interactive_example():
             if 0 < mouse_x < depth_image.width and 0 < mouse_y < depth_image.height:
                 scene.draw_text("Depth (%d, %d): %.3f" % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))), (20, 60), (1.0, 1.0, 0.0))
                 # print(" Depth (%d, %d): %.3f " % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))))
-        scene.draw_text(repr(timings), (20, 20), color=(1.0, 1.0, 0.0, 1.0), background_color=(0, 0, 1, 0))
+        scene.draw_text(repr(timings), (20, 20), color=(1.0, 1.0, 0.0, 1.0), background_color=(0, 0, 1, 1))
         timings["text"] = time.time() - tic
 
         scene.swap_buffers()

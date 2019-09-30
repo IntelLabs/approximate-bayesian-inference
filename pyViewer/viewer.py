@@ -133,6 +133,7 @@ void main()
 }
 '''
 
+# TODO: Fix properly the alpha blending and remove the discard command that causes aliasing
 image_fragment_shader = '''
 #version 330 core
 in vec4 ourColor;
@@ -145,6 +146,8 @@ uniform sampler2D Texture;
 void main()
 {
     f_color = texture(Texture, TexCoord) + ourColor;
+    if (f_color.a <= 0.1)
+        discard;
 }
 '''
 
@@ -779,8 +782,9 @@ class CScene(object):
 
     # TODO: Enable camera facing text rendering
     # TODO: Improve efficiency. Maybe pre-render the font on a texture and create a quad per letter
-    # TODO: BUG: Background color alpha not working
+    # TODO: Alpha blending not working
     def draw_text(self, text, pos, color=(1, 1, 1, 1), background_color=None):
+        color = tuple((np.array(color)*255).astype(np.uint8))
         image_display = CImage(self.ctx)
         text_width, text_height = self.font.getsize(text)
         (width, baseline), (offset_x, offset_y) = self.font.font.getsize(text)
@@ -795,7 +799,7 @@ class CScene(object):
         else:
             PIL_image = Image.new('RGBA', (text_width - offset_x, text_height - offset_y), color=(0, 0, 0, 0))
         draw = ImageDraw.Draw(PIL_image)
-        draw.text((-offset_x, -offset_y), text, font=self.font, fill=tuple((np.array(color)*255).astype(np.uint8)))
+        draw.text((-offset_x, -offset_y), text, font=self.font, fill=color)
         image_display.set_texture(PIL_image.transpose(Image.FLIP_TOP_BOTTOM))
         image_display.draw(None)
 
