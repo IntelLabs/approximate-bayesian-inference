@@ -183,6 +183,9 @@ class CCamera(object):
         self.focal_px = focal_px
         self.set_intrinsics(width, height, focal_px, focal_px, width / 2, height / 2, 0)
 
+    def update(self):
+        self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
+
     def set_resolution(self, width, height):
         self.set_intrinsics(width, height, self.focal_px, self.focal_px, width / 2, height / 2, self.s)
 

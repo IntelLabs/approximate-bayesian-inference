@@ -1,18 +1,17 @@
 #!/usr/bin/python3
-import os
 import time
 import numpy as np
 import transformations as tf
-from pyViewer.viewer import CScene, CPointCloud, CNode, CTransform, CEvent, CImage, CGLFWWindowManager
-from pyViewer.geometry_makers import make_mesh, make_objects
+import moderngl as mgl
+from pyViewer.viewer import CScene, CPointCloud, CNode, CTransform, CEvent, CGLFWWindowManager
+from pyViewer.geometry_makers import make_mesh
 from pyViewer.models import REFERENCE_FRAME_MESH, FLOOR_MESH
 
-os.environ["MESA_GL_VERSION_OVERRIDE"] = "3.3"
-os.environ["MESA_GLSL_VERSION_OVERRIDE"] = "330"
 
-
-def make_skeleton():
+def make_skeleton(scene):
     # Skeleton definition
+    skeleton_node = CNode(geometry=CPointCloud(scene.ctx), transform=CTransform( tf.compose_matrix(translate=[0,1,0]) ))
+    skeleton_node.geom.draw_mode = mgl.LINES
     skeleton_joint_names = ["head", "neck", "l_shoulder", "r_shoulder", "l_elbow", "r_elbow", "l_wrist", "r_wrist",
                             "l_hip", "r_hip", "l_knee", "r_knee", "l_foot", "r_foot"]
     skeleton_links = [
@@ -33,25 +32,50 @@ def make_skeleton():
 
     skeleton_joint_pos = np.zeros((len(skeleton_joint_names), 3))
 
-    skeleton = {"links": skeleton_links, "names": skeleton_joint_names, "pos": skeleton_joint_pos, "base": [0, 0, 0]}
+    skeleton_data = np.zeros((len(skeleton_joint_names), 7))
+    skeleton_node.geom.set_data(skeleton_data)
+
+    skeleton = {"links": skeleton_links, "names": skeleton_joint_names, "pos": skeleton_joint_pos, "node": skeleton_node}
     return skeleton
 
 
-def render_skeleton(skeleton, scene, color=(0,0,1,1), thickness=5):
+def render_skeleton(skeleton, color=(0,0,1,1), thickness=5):
+    color = np.array(color)
+    skeleton_data = np.array([])
+    skeleton_node = skeleton["node"]
+    skeleton_node.geom.size = thickness
     for link in skeleton["links"]:
         link1 = link[0]
         link2 = link[1]
-        link1_pos = skeleton["pos"][link1] + skeleton["base"]
-        link2_pos = skeleton["pos"][link2] + skeleton["base"]
-        scene.draw_line(link1_pos.astype(np.float32),
-                        link2_pos.astype(np.float32), np.array(color, np.float32), thickness)
+        link1_pos = skeleton["pos"][link1]
+        link2_pos = skeleton["pos"][link2]
+        skeleton_data = np.concatenate((skeleton_data, link1_pos, color)) if skeleton_data.size else np.concatenate((link1_pos, color))
+        skeleton_data = np.concatenate((skeleton_data, link2_pos, color))
+    skeleton_node.geom.set_data(skeleton_data.astype(np.float32))
 
 
 def skeleton_example():
 
+    #####################################################
+    # Visualizer initialization
+    #####################################################
+    # Load scene
+    scene = CScene(name='Intel Labs::SSR::VU Depth Renderer. javier.felip.leon@intel.com', width=800, height=600, window_manager = CGLFWWindowManager())
+
+    # Set the camera position
+    scene.camera.r = 5.0
+    scene.camera.update()
+
+    # Example floor
+    floor_node = CNode(geometry=make_mesh(scene.ctx, FLOOR_MESH, scale=1.0), transform=CTransform( tf.compose_matrix(translate=[0,0,-0.02]) ) )
+    scene.insert_graph([floor_node])
+
+    # Example reference frame size 1.0
+    nodes1 = CNode(geometry=make_mesh(scene.ctx, REFERENCE_FRAME_MESH, scale=1.0))
+    scene.insert_graph([nodes1])
+
     # Set initial joint positions for visualization. See details of the skeleton definition in make_skeleton()
-    skeleton = make_skeleton()
-    skeleton["base"] = np.array([1, 0, 0])
+    skeleton = make_skeleton(scene)
     skeleton_joint_pos = skeleton["pos"]
     skeleton_joint_pos[0] = np.array([0, 0, 1.7])       # Head
     skeleton_joint_pos[1] = np.array([0, 0, 1.5])       # Neck
@@ -67,16 +91,7 @@ def skeleton_example():
     skeleton_joint_pos[11] = np.array([0, -0.25, 0.4])  # r_knee
     skeleton_joint_pos[12] = np.array([0, 0.25, 0])     # l_foot
     skeleton_joint_pos[13] = np.array([0, -0.25, 0])    # r_foot
-
-    #####################################################
-    # Visualizer initialization
-    #####################################################
-    # Load scene
-    scene = CScene(name='Intel Labs::SSR::VU Depth Renderer. javier.felip.leon@intel.com', width=800, height=600, window_manager = CGLFWWindowManager())
-
-    # Example floor
-    floor_node = CNode(geometry=make_mesh(scene.ctx, FLOOR_MESH, scale=1.0), transform=CTransform( tf.compose_matrix(translate=[0,0,-0.02]) ) )
-    scene.insert_graph([floor_node])
+    scene.insert_graph([skeleton["node"]])
 
     #####################################################
     # Main Loop
@@ -100,13 +115,13 @@ def skeleton_example():
 
         # Draw skeleton
         tic = time.time()
-        render_skeleton(skeleton, scene, color=(1, 0, 1, 1), thickness=8)
-        timings["draw_skeleton"] = time.time() - tic
+        # Add some animation to the example
+        skeleton["pos"][12][0] = np.sin(time.time()) / 2
+        skeleton["pos"][13][0] = -skeleton["pos"][12][0]
 
-        # Draw reference frame
-        scene.draw_line(np.array([0, 0, 0], np.float32), np.array([1, 0, 0], np.float32), np.array([1, 0, 0, 1], np.float32), 4)
-        scene.draw_line(np.array([0, 0, 0], np.float32), np.array([0, 1, 0], np.float32), np.array([0, 1, 0, 1], np.float32), 4)
-        scene.draw_line(np.array([0, 0, 0], np.float32), np.array([0, 0, 1], np.float32), np.array([0, 0, 1, 1], np.float32), 4)
+        # Draw skeleton
+        render_skeleton(skeleton, color=(1, 0, 1, 1), thickness=8)
+        timings["draw_skeleton"] = time.time() - tic
 
         tic = time.time()
         scene.swap_buffers()
