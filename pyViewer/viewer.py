@@ -792,31 +792,19 @@ class CScene(object):
             else:
                 glutBitmapCharacter(GLUT_BITMAP_9_BY_15, ord(ch))
 
-    def draw_line(self, a, b, color, thickness):
-        # pa = np.matmul(np.append(a, 1).reshape(1,-1), np.matmul(self.perspective, self.camera.camera_matrix).transpose())
-        # pb = np.matmul(np.append(b, 1).reshape(1,-1), np.matmul(self.perspective, self.camera.camera_matrix).transpose())
-        # pa = np.matmul(np.append(a, 1), self.perspective)[0:3]
-        # pb = np.matmul(np.append(b, 1), self.perspective)[0:3]
-        mvp = np.matmul(self.perspective, self.camera.camera_matrix)
-        mat = tuple(np.array(mvp, np.float32).reshape(-1, order='F'))
-        glUseProgram(0)
-        glLoadIdentity()
-        glLoadMatrixf(mat)
-        glLineWidth(thickness)
-        glDisable(GL_LIGHTING)
-        glEnable(GL_DEPTH_TEST)
-        glBegin(GL_LINES)
-        glColor3fv(np.array(color[0:3], np.float32))
-        glVertex3fv(a)
-        glVertex3fv(b)
-        glEnd()
-        glEnable(GL_LIGHTING)
-        # line = CPointCloud(self.ctx)
-        # line.draw_mode = mgl.LINE_STRIP
-        # line.set_data(np.concatenate((a, color, b, color)))
-        # line.size = thickness
-        # line.draw(np.matmul(self.perspective, self.camera.camera_matrix))
-        # line.__del__()
+    def draw_line(self, a, b, color, thickness, write_on_depth_buffer=False):
+        if not write_on_depth_buffer:
+            self.ctx.disable(mgl.DEPTH_TEST)
+
+        line = CPointCloud(self.ctx)
+        line.set_data(np.concatenate((a, color, b, color)))
+        line.size = thickness
+        line.draw_mode = mgl.LINE_STRIP
+        line.draw(mvp=np.matmul(self.perspective, self.camera.camera_matrix))
+        del line
+
+        if not write_on_depth_buffer:
+            self.ctx.enable(mgl.DEPTH_TEST)
 
     def get_depth_image(self):
         zFar = self.far
@@ -898,13 +886,11 @@ class CNode(object):
 
     def draw(self, perspective, view, model, mode):
         model = np.matmul(model, self.t.t)
-        Mvp = np.matmul(perspective, np.matmul(view, model))
-        # Mvp = np.matmul(perspective, view)
+        mvp = np.matmul(perspective, np.matmul(view, model))
         if self.geom is not None:
-            self.geom.draw(Mvp, mode)
+            self.geom.draw(mvp, mode)
         for c in self.children:
             c.draw(perspective, view, model, mode)
-            # c.draw(perspective, view, np.eye(4), mode)
 
     def __repr__(self):
         res = ""
@@ -949,6 +935,8 @@ class CPointCloud(object):
         self.prog['psize'].value = self.size
         if self.draw_mode is not None:
             mode = self.draw_mode
+        self.ctx.point_size = self.size
+        self.ctx.line_width = self.size
         self.vao.render(mode)
 
     def __del__(self):

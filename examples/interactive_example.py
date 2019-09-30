@@ -45,6 +45,7 @@ def interactive_example():
     pcnode = CNode(geometry=CPointCloud(scene.ctx))
     pcdata = np.random.rand(10000000 * 7).astype(np.float32)
     pcnode.geom.set_data(pcdata)
+    pcnode.geom.size = 5
     scene.insert_graph([pcnode])
 
     # Object nodes
@@ -64,7 +65,7 @@ def interactive_example():
     timings = dict()
     is_done = False
     while not is_done:
-        pcdata = np.random.rand(100000 * 7).astype(np.float32)
+        pcdata = np.random.rand(1000 * 7).astype(np.float32)
         pcnode.geom.set_data(pcdata)
 
         t_ini = time.time()
@@ -76,10 +77,10 @@ def interactive_example():
 
         tic = time.time()
         # TODO: Fix the draw line shader
-        # scene.draw_line(np.array([0, 0, 0], np.float32), np.array([1, 1, 1], np.float32), np.array([1, 0, 0, 1], np.float32), 5)
 
         scene.clear()
         scene.draw()
+        scene.draw_line(np.array([0, 0, 0], np.float32), np.array([1, 1, 1], np.float32), np.array([1, 0, 0, 1], np.float32), 5)
         scene.swap_buffers()
 
         timings["draw"] = time.time() - tic
