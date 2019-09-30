@@ -16,34 +16,33 @@ def make_skeleton():
     skeleton_joint_names = ["head", "neck", "l_shoulder", "r_shoulder", "l_elbow", "r_elbow", "l_wrist", "r_wrist",
                             "l_hip", "r_hip", "l_knee", "r_knee", "l_foot", "r_foot"]
     skeleton_links = [
-        ["head", "neck"],
-        ["neck", "l_shoulder"],
-        ["neck", "r_shoulder"],
-        ["l_shoulder", "l_elbow"],
-        ["r_shoulder", "r_elbow"],
-        ["l_elbow", "l_wrist"],
-        ["r_elbow", "r_wrist"],
-        ["neck", "l_hip"],
-        ["neck", "r_hip"],
-        ["l_hip", "l_knee"],
-        ["r_hip", "r_knee"],
-        ["l_knee", "l_foot"],
-        ["r_knee", "r_foot"]
+        [0, 1],     # ["head", "neck"]
+        [1, 2],     # ["neck", "l_shoulder"]
+        [1, 3],     # ["neck", "r_shoulder"]
+        [2, 4],     # ["l_shoulder", "l_elbow"]
+        [3, 5],     # ["r_shoulder", "r_elbow"]
+        [4, 6],     # ["l_elbow", "l_wrist"]
+        [5, 7],     # ["r_elbow", "r_wrist"]
+        [1, 8],     # ["neck", "l_hip"]
+        [1, 9],     # ["neck", "r_hip"]
+        [8, 10],    # ["l_hip", "l_knee"]
+        [9, 11],    # ["r_hip", "r_knee"]
+        [10, 12],  # ["r_hip", "r_knee"]
+        [11, 13],  # ["r_hip", "r_knee"]
     ]
 
-    skeleton_joint_pos = np.zeros((len(skeleton_joint_names) + 1, 3))
+    skeleton_joint_pos = np.zeros((len(skeleton_joint_names), 3))
 
     skeleton = {"links": skeleton_links, "names": skeleton_joint_names, "pos": skeleton_joint_pos, "base": [0, 0, 0]}
     return skeleton
 
 
 def render_skeleton(skeleton, scene, color=(0,0,1,1), thickness=5):
-    names = skeleton["names"]
     for link in skeleton["links"]:
-        link1_name = link[0]
-        link2_name = link[1]
-        link1_pos = skeleton["pos"][names.index(link1_name)] + skeleton["base"]
-        link2_pos = skeleton["pos"][names.index(link2_name)] + skeleton["base"]
+        link1 = link[0]
+        link2 = link[1]
+        link1_pos = skeleton["pos"][link1] + skeleton["base"]
+        link2_pos = skeleton["pos"][link2] + skeleton["base"]
         scene.draw_line(link1_pos.astype(np.float32),
                         link2_pos.astype(np.float32), np.array(color, np.float32), thickness)
 
