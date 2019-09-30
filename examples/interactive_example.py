@@ -8,8 +8,8 @@ from pyViewer.viewer import CScene, CPointCloud, CNode, CTransform, CEvent, CIma
 from pyViewer.geometry_makers import make_mesh, make_objects
 from pyViewer.models import REFERENCE_FRAME_MESH, FLOOR_MESH
 
-# os.environ["MESA_GL_VERSION_OVERRIDE"] = "3.3"
-# os.environ["MESA_GLSL_VERSION_OVERRIDE"] = "330"
+os.environ["MESA_GL_VERSION_OVERRIDE"] = "3.3"
+os.environ["MESA_GLSL_VERSION_OVERRIDE"] = "330"
 
 
 def interactive_example():
