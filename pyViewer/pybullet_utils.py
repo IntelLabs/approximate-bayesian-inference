@@ -4,7 +4,7 @@ except ModuleNotFoundError:
     print("Pybullet required for pybullet support functions")
     exit(0)
 
-import pyViewer.transformations as tf
+import transformations as tf
 from pyViewer.viewer import CTransform, CNode
 from pyViewer.geometry_makers import make_mesh
 from pyViewer.models import REFERENCE_FRAME_MESH

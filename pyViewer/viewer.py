@@ -5,8 +5,8 @@ import moderngl as mgl
 import PIL
 from PIL import Image, ImageDraw, ImageFont
 import pygame
-from pygame.locals import DOUBLEBUF, OPENGL, FULLSCREEN
 from pyglfw import pyglfw
+from pathlib import Path
 
 '''
 REQUIREMENTS
@@ -31,7 +31,6 @@ point_cloud_vertex_shader = '''
 #version 330 core
 
 uniform mat4 Mvp;
-uniform int psize;
 
 in vec3 in_vert;
 in vec4 in_color;
@@ -41,7 +40,6 @@ out vec4 v_color;
 void main() {
 	v_color = in_color;
 	gl_Position = Mvp * vec4(in_vert, 1.0);
-	gl_PointSize = psize;
 }
 '''
 
@@ -486,6 +484,7 @@ class CGLFWWindowManager(CWindowManager):
             ev.type = CEvent.KEYDOWN
 
         ev.data = (key, scancode, mods)
+        ev.key = key
         self.event_queue.append(ev)
         print("keybrd: key=%s scancode=%s action=%s mods=%s" % (key, scancode, action, mods))
 
@@ -576,7 +575,7 @@ class CGLFWWindowManager(CWindowManager):
 
     def draw(self):
         self.window.swap_buffers()
-        # self.window.show()
+        self.window.show()
 
     def set_window_mode(self, size, options=None):
         self.window.size = size
@@ -593,21 +592,24 @@ class CGLFWWindowManager(CWindowManager):
 
 
 class CScene(object):
-    def __init__(self, name="PyViewer", width=800, height=600, location=(0, 0), window_manager=CGLFWWindowManager(), near=0.001, far = 100.0):
+    def __init__(self, name="PyViewer", width=800, height=600, location=(0, 0), window_manager=CGLFWWindowManager(), near=0.001, far = 100.0, options=None):
         print("ModernGL: ", mgl.__version__)
         self.ctx = mgl.create_standalone_context()
 
         self.width = width
         self.height = height
 
-        self.renderbuff = self.ctx.renderbuffer((self.width, self.height))
-        self.depthbuff = self.ctx.depth_renderbuffer((self.width, self.height))
-        self.fbo = self.ctx.framebuffer(color_attachments=[self.renderbuff], depth_attachment=self.depthbuff)
-        self.fbo.use()
+        self.fbo = self.ctx.simple_framebuffer((self.width, self.height))
+
+        # For some reason the demo NUC does not support separate framebuffers
+        # self.renderbuff = self.ctx.renderbuffer((self.width, self.height))
+        # self.depthbuff = self.ctx.depth_renderbuffer((self.width, self.height))
+        # self.fbo = self.ctx.framebuffer(color_attachments=[self.renderbuff], depth_attachment=self.depthbuff)
 
         self.wm = window_manager
 
-        self.init_display(name, width, height, location)
+        self.options = options
+        self.init_display(name, width, height, location, options)
 
         self.ctx.viewport = (0, 0, self.width, self.height)
         self.root = CNode(id=0, parent=None, transform=CTransform(), geometry=None, material=None)
@@ -634,7 +636,8 @@ class CScene(object):
 
         self.perspective = np.matmul(ndc_matrix, proj_matrix)
 
-        self.font = ImageFont.truetype("../fonts/FiraCode-Medium.ttf", 28)
+        fonts_path = str(Path(__file__).resolve().parent) + "/../fonts/FiraCode-Medium.ttf"
+        self.font = ImageFont.truetype(fonts_path, 28)
 
     # def __del__(self):
     #     self.fbo.release()
@@ -852,7 +855,7 @@ class CScene(object):
                 quit()
 
         if event.type == CEvent.VIDEORESIZE:
-            self.wm.set_window_mode((event.data[1], event.data[2]))
+            self.wm.set_window_mode((event.data[1], event.data[2]), options=self.options)
             aspect = event.data[1] / float(event.data[2])
             # self.perspective = self.compute_perspective_matrix(self.FoV, self.FoV/aspect, self.near, self.far)
             self.width = event.data[1]
@@ -875,6 +878,7 @@ class CNode(object):
         self.mat = material
         self.pybullet_id = None
         self.pybullet_v_mat = np.eye(4)
+        self.visible = True
         if parent is not None:
             self.set_parent(parent)
 
@@ -889,10 +893,13 @@ class CNode(object):
         if p is not None:
             p.children.append(self)
 
+    def set_is_visible(self, visible):
+        self.visible = visible
+
     def draw(self, perspective, view, model, mode):
         model = np.matmul(model, self.t.t)
         mvp = np.matmul(perspective, np.matmul(view, model))
-        if self.geom is not None:
+        if self.geom is not None and self.visible:
             self.geom.draw(mvp, mode)
         for c in self.children:
             c.draw(perspective, view, model, mode)
@@ -929,20 +936,25 @@ class CPointCloud(object):
     def set_data(self, data):
         if self.vbo is not None:
             self.vbo.release()
+            self.vbo = None
         if self.vao is not None:
             self.vao.release()
+            self.vao = None
         self.data = data
-        self.vbo = self.ctx.buffer(data)
-        self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
+        if data is not None:
+            self.vbo = self.ctx.buffer(data)
+            self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
 
     def draw(self, mvp, mode=mgl.POINTS):
         self.prog['Mvp'].value = tuple(np.array(mvp, np.float32).reshape(-1, order='F'))
-        self.prog['psize'].value = self.size
         if self.draw_mode is not None:
             mode = self.draw_mode
         self.ctx.point_size = self.size
         self.ctx.line_width = self.size
-        self.vao.render(mode)
+        if self.vao is not None:
+            self.vao.render(mode)
+        else:
+            print("Error. CPointCloud. Trying to display a None VertexArrayObject.")
 
     def __del__(self):
         if self.data is not None:
@@ -956,6 +968,7 @@ class CPointCloud(object):
         if self.prog is not None:
             self.prog.release()
             self.prog = None
+
 
 
 class CGeometry(object):
@@ -1077,6 +1090,10 @@ class CImage(CGeometry):
 
         elif isinstance(image, str):
             texture_image = Image.open(image).transpose(Image.FLIP_TOP_BOTTOM).convert('RGBA')
+            texture_image_data = texture_image.tobytes()
+
+        elif isinstance(image, np.ndarray):
+            texture_image = PIL.Image.fromarray(image).transpose(Image.FLIP_TOP_BOTTOM).convert('RGBA')
             texture_image_data = texture_image.tobytes()
         else:
             raise Exception("Unable to interpret texture type. Required a PIL.Image or a path to an image. Got " + str(type(image)))

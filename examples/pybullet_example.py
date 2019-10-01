@@ -11,8 +11,8 @@ from pyViewer.pybullet_utils import init_physics, load_simulation, update_pybull
 from matplotlib import cm
 from PIL import Image
 
-os.environ["MESA_GL_VERSION_OVERRIDE"] = "3.3"
-os.environ["MESA_GLSL_VERSION_OVERRIDE"] = "330"
+#os.environ["MESA_GL_VERSION_OVERRIDE"] = "3.3"
+#os.environ["MESA_GLSL_VERSION_OVERRIDE"] = "330"
 
 
 def pybullet_example():

@@ -4,7 +4,8 @@ import time
 import numpy as np
 import transformations as tf
 from PIL import Image
-from pyViewer.viewer import CScene, CPointCloud, CNode, CTransform, CEvent, CImage, CGLFWWindowManager
+import pygame
+from pyViewer.viewer import CScene, CPointCloud, CNode, CTransform, CEvent, CImage, CGLFWWindowManager, CPygameWindowManager
 from pyViewer.geometry_makers import make_mesh, make_objects
 from pyViewer.models import REFERENCE_FRAME_MESH, FLOOR_MESH
 
@@ -31,7 +32,9 @@ def interactive_example():
     # Visualizer initialization
     #####################################################
     # Load scene
-    scene = CScene(name='Intel Labs::SSR::VU Depth Renderer. javier.felip.leon@intel.com', width=800, height=600, window_manager = CGLFWWindowManager())
+    scene = CScene(name='Intel Labs::SSR::VU Depth Renderer. javier.felip.leon@intel.com',
+                   width=800, height=600,
+                   window_manager=CGLFWWindowManager(), options=pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE)
 
     # Example reference frame size 1.0
     nodes1 = CNode(geometry=make_mesh(scene.ctx, REFERENCE_FRAME_MESH, scale=1.0))
