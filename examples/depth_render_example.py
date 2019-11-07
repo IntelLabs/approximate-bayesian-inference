@@ -115,7 +115,7 @@ def semantic_render(scene, camera_positions=[(0.7, 0.7, 2)], width=100, height=1
         # Clear scene and render
         viz.clear(0.0, 0.0, 0.0, 0.0)
         viz.draw()
-        seg_images[i] = np.copy(viz.get_render_image())
+        seg_images[i] = np.copy(viz.get_semantic_image())
         viz.swap_buffers()
 
         if show:

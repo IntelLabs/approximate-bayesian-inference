@@ -36,7 +36,7 @@ def interactive_example():
                    width=640, height=480,
                    window_manager=CGLFWWindowManager(), options=pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE)
 
-    scene.set_font(font_size=52, font_color=(255, 0, 0, 255))
+    scene.set_font(font_size=52, font_color=(255, 255, 255, 255), background_color=(100, 100, 100, 255))
 
     # Optional: Define the camera parameters (e.g. from a Realsense D435 camera @ VGA resolution)
     camera_K = np.array([[613.223, 0.      , 313.568],
@@ -96,7 +96,12 @@ def interactive_example():
                 is_done = True
             scene.process_event(event)
 
+        # Get the semantic segmentation image before drawing the scene
         tic = time.time()
+        seg_image = scene.get_semantic_image()
+        texture_image = Image.frombytes("RGBA", seg_image.shape[0:2], seg_image)
+        image_seg_display.set_texture(texture_image)
+        timings["read_segmented"] = time.time() - tic
 
         # Draw scene
         scene.clear()
@@ -135,12 +140,6 @@ def interactive_example():
         depth_image = Image.frombytes("F", depth_image.shape, depth_image).transpose(Image.FLIP_TOP_BOTTOM)
         timings["read_depth"] = time.time() - tic
 
-        # Get the semantic segmentation image
-        tic = time.time()
-        seg_image = scene.get_semantic_image()
-        texture_image = Image.frombytes("RGBA", seg_image.shape[0:2], seg_image)
-        image_seg_display.set_texture(texture_image)
-        timings["read_segmented"] = time.time() - tic
 
         timings["all"] = time.time() - t_ini
         print(timings)

@@ -22,7 +22,7 @@ TODO:
 - Fix lighting?
 - Floating text
 - Primitive geometry makers
-- Implement a proper semantic segmentation on an auxiliar buffer and
+- Implement a proper semantic segmentation on an auxiliar buffer
 
 - GUI
     - Screenshot button
@@ -652,12 +652,18 @@ class CScene(object):
     def __init__(self, name="PyViewer", width=800, height=600, location=(0, 0), window_manager=CGLFWWindowManager(), near=0.001, far = 100.0, options=None):
         print("ModernGL: ", mgl.__version__)
         self.ctx = mgl.create_standalone_context()
+        # self.ctx = mgl.create_context()  # Use this when binding to an existing OpenGL context
 
         self.width = width
         self.height = height
 
         # Single framebuffer for the demo NUC, for some reason the demo NUC does not support separate framebuffers
         # self.fbo = self.ctx.simple_framebuffer((self.width, self.height))
+
+        # Auxiliar framebuffer for offscreen rendering. e.g. semantic segmented scene
+        self.renderbuff_aux = self.ctx.renderbuffer((self.width, self.height))
+        self.depthbuff_aux = self.ctx.depth_renderbuffer((self.width, self.height))
+        self.fbo_aux = self.ctx.framebuffer(color_attachments=[self.renderbuff_aux], depth_attachment=self.depthbuff_aux)
 
         # Separated framebuffers enable offscreen render and depth image
         self.renderbuff = self.ctx.renderbuffer((self.width, self.height))
@@ -831,8 +837,6 @@ class CScene(object):
         if camera is None:
             camera = self.camera
 
-        # self.fbo.use()
-
         self.ctx.viewport = (0, 0, camera.width, camera.height)
         proj_matrix = self.compute_projection_matrix(camera.fx, camera.fy, camera.cx, camera.cy,
                                                      self.near, self.far, camera.s)
@@ -847,6 +851,7 @@ class CScene(object):
         self.ctx.blend_func = (mgl.SRC_ALPHA, mgl.ONE_MINUS_SRC_ALPHA)
         self.ctx.enable(mgl.DEPTH_TEST)
         self.root.draw(self.perspective, camera.camera_matrix, np.eye(4), self.render_mode)
+        self.ctx.finish()
 
     def set_font(self, font_path="../fonts/FiraCode-Medium.ttf", font_size=64, font_color=(255,255,255,255), background_color=(0,0,0,0)):
         self.font = ImageFont.truetype(font_path, font_size)
@@ -962,7 +967,9 @@ class CScene(object):
             print(e)
             return np.zeros((self.width, self.height, 4))
 
+    # TODO: The change of buffers does not seem to work properly and the
     def get_semantic_image(self):
+        print("pyViewer warning!!. get_semantic_image(self) just returns a render of the geometry objects")
 
         visibility = [False] * len(self.nodes)
         for i, n in enumerate(self.nodes):
@@ -973,22 +980,27 @@ class CScene(object):
                 visibility[i] = n.visible
                 n.set_is_visible(False)
 
+        # Activate the auxiliar framebuffer to render the semantic image
+        self.fbo_aux.use()
         self.clear(0, 0, 0, 0)
         self.draw()
+        self.ctx.finish()
+
+        # Activate the main framebuffer after the semantic render has been done
+        self.fbo.use()
 
         for i, n in enumerate(self.nodes):
             n.set_is_visible(visibility[i])
 
+        img_buffer = np.zeros((self.width, self.height, 4))
         try:
             img_buffer = np.frombuffer(
-                self.fbo.read(viewport=self.ctx.viewport, components=4, dtype='f1', attachment=0),
+                self.fbo_aux.read(viewport=self.ctx.viewport, components=4, dtype='f1', attachment=1),
                 dtype=np.dtype('uint8')).reshape(self.width, self.height, 4)
-
-            return img_buffer
-
         except ValueError as e:
             print(e)
-            return np.zeros((self.width, self.height, 4))
+
+        return np.copy(img_buffer)
 
     def process_event(self, event):
         self.camera.process_event(event)
@@ -1198,7 +1210,6 @@ class CGeometry(object):
             self.texture.use(tex_id)
 
         if 'id' in self.prog:
-            # self.prog['id'].value = np.random.randint(0, 2**24) & 0xffffffff  # TODO: This random is for debug
             self.prog['id'].value = id & 0xffffffff
 
         if 'normal_colors' in self.prog:
@@ -1219,6 +1230,7 @@ class CGeometry(object):
         if self.ibo is not None:
             self.ibo.release()
             self.ibo = None
+        # TODO: This needs fixing to release the shader if it is a local shader
         # if self.prog is not None:
         #     self.prog.release()
         #     self.prog = None
