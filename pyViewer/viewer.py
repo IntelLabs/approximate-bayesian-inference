@@ -666,11 +666,6 @@ class CScene(object):
         # self.fbo = self.ctx.framebuffer(color_attachments=[self.renderbuff], depth_attachment=self.depthbuff)
         # self.fbo.use()
 
-        # # Set an auxiliar renderbuffer for offscreen operations
-        # self.depthbuff_aux = self.ctx.depth_renderbuffer((self.width, self.height))
-        # self.renderbuff_aux = self.ctx.renderbuffer((self.width, self.height))
-        # self.fbo_aux = self.ctx.framebuffer(color_attachments=[self.renderbuff], depth_attachment=self.depthbuff)
-
         self.wm = window_manager
 
         self.options = options
@@ -1084,10 +1079,6 @@ class CGeometry(object):
         self.prog = self.ctx.program(vertex_shader=self.vertex_shader, fragment_shader=self.fragment_shader)
         self.draw_mode = None
         self.texture = None
-        self.index_to_color = list(ImageColor.colormap.values())
-        self.color_to_index = dict()
-        for i, c in enumerate(self.index_to_color):
-            self.color_to_index[c] = i
 
     def set_texture(self, path):
         texture_image = Image.open(path).transpose(Image.FLIP_TOP_BOTTOM).convert('RGBA')
