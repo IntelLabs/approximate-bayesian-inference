@@ -1,4 +1,5 @@
 import os
+import string
 import numpy as np
 import transformations as tf
 import moderngl as mgl
@@ -84,8 +85,8 @@ void main() {
 geometry_fragment_shader = '''
 #version 330 core
 
+uniform int normal_colors;
 uniform sampler2D Texture;
-uniform vec3 Light;
 
 in vec3 v_vert;
 in vec3 v_norm;
@@ -96,13 +97,15 @@ out vec4 f_color;
 
 void main()
 {
-    float lum = dot(normalize(v_norm), normalize(v_vert - Light));
-    lum = acos(lum) / 3.14159265;
-    lum = clamp(lum, 0.0, 0.1);
-
     vec4 color = texture(Texture, v_text.xy);
-
-    f_color = vec4(color.rgb + v_color.rgb * v_color.a * lum, color.a);
+    if (normal_colors > 0)
+    {
+        f_color = color + v_color + vec4(v_norm.xyz, 0);
+    }
+    else
+    {
+        f_color = color + v_color;
+    }
 }
 '''
 
@@ -169,7 +172,6 @@ void main()
 }
 '''
 
-# TODO: Fix properly the alpha blending and remove the discard command that causes aliasing
 image_fragment_shader = '''
 #version 330 core
 in vec4 ourColor;
@@ -182,8 +184,6 @@ uniform sampler2D Texture;
 void main()
 {
     f_color = texture(Texture, TexCoord) + ourColor;
-    if (f_color.a <= 0.1)
-        discard;
 }
 '''
 
@@ -656,15 +656,14 @@ class CScene(object):
         self.width = width
         self.height = height
 
-        # self.fbo_aux = self.ctx.simple_framebuffer((self.width, self.height))
+        # Single framebuffer for the demo NUC, for some reason the demo NUC does not support separate framebuffers
         self.fbo = self.ctx.simple_framebuffer((self.width, self.height))
-        self.fbo.use()
 
-        # For some reason the demo NUC does not support separate framebuffers
+        # Separated framebuffers enable offscreen render and depth image
         # self.renderbuff = self.ctx.renderbuffer((self.width, self.height))
         # self.depthbuff = self.ctx.depth_renderbuffer((self.width, self.height))
         # self.fbo = self.ctx.framebuffer(color_attachments=[self.renderbuff], depth_attachment=self.depthbuff)
-        # self.fbo.use()
+        self.fbo.use()
 
         self.wm = window_manager
 
@@ -703,7 +702,7 @@ class CScene(object):
         self.perspective = np.matmul(ndc_matrix, proj_matrix)
 
         fonts_path = str(Path(__file__).resolve().parent) + "/../fonts/FiraCode-Medium.ttf"
-        self.font = ImageFont.truetype(fonts_path, 28)
+        self.set_font(font_path=fonts_path, font_size=64)
 
         self.segment_program = self.ctx.program(vertex_shader=semantic_vertex_shader, fragment_shader=semantic_fragment_shader)
         self.geometry_program = self.ctx.program(vertex_shader=geometry_vertex_shader, fragment_shader=geometry_fragment_shader)
@@ -845,34 +844,76 @@ class CScene(object):
         self.perspective = np.matmul(ndc_matrix, proj_matrix)
 
         self.ctx.enable(mgl.BLEND)
+        self.ctx.blend_func = (mgl.SRC_ALPHA, mgl.ONE_MINUS_SRC_ALPHA)
         self.ctx.enable(mgl.DEPTH_TEST)
         self.root.draw(self.perspective, camera.camera_matrix, np.eye(4), self.render_mode)
 
-    def set_font(self, font_path="../fonts/FiraCode-Medium.ttf", font_size=28):
+    def set_font(self, font_path="../fonts/FiraCode-Medium.ttf", font_size=64, font_color=(255,255,255,255), background_color=(0,0,0,0)):
         self.font = ImageFont.truetype(font_path, font_size)
+        self.font_texture_map, self.font_texture_uv = self.make_font_texture(self.font, font_color, background_color)
+        self.char_width, self.line_height = self.font.getsize("A")
+        self.text_display = CImage(self.ctx)
+        self.text_display.set_texture(self.font_texture_map.transpose(Image.FLIP_TOP_BOTTOM))
+
+    @staticmethod
+    def make_font_texture(font, font_color=(255, 255, 255, 255), background_color=(0, 0, 0, 0)):
+        uv_coords = {}
+        text = string.printable
+
+        # Generate a texture image with back background and white text
+        text_width, text_height = font.getsize(text)
+        (width, baseline), (offset_x, offset_y) = font.font.getsize(text)
+        texmap = Image.new('RGBA', (text_width - offset_x, text_height - offset_y), color=background_color)
+        draw = ImageDraw.Draw(texmap)
+        draw.text((-offset_x, -offset_y), text, font=font, fill=font_color)
+        # texmap.show()
+
+        # TODO: This assumes fixed width characters, compute per-character width to enable variable width typefaces
+        # Compute each character coordinates
+        char_width, char_height = font.getsize("A")
+        for i, s in enumerate(text):
+            v0 = 0
+            v1 = 1
+            u0 = (char_width * i) / text_width
+            u1 = u0 + char_width / text_width
+            uv_coords[s] = (u0, v0, u1, v1)
+
+        return texmap, uv_coords
 
     # TODO: Enable camera facing text rendering
-    # TODO: Improve efficiency. Maybe pre-render the font on a texture and create a quad per letter
     # TODO: Alpha blending not working
-    def draw_text(self, text, pos, color=(1, 1, 1, 1), background_color=None):
-        color = tuple((np.array(color)*255).astype(np.uint8))
-        image_display = CImage(self.ctx)
-        text_width, text_height = self.font.getsize(text)
-        (width, baseline), (offset_x, offset_y) = self.font.font.getsize(text)
+    def draw_text(self, text, pos, scale=1):
+        # Get text height and width and transofrm them to NDC
+        char_width = self.char_width / self.width
+        line_height = self.line_height / self.height
 
-        # Convert the pos in pixels to NDC
+        # Convert the pos in pixels to NDC. This are the positions for the corner vertices
         pos_ndc = (pos[0] / self.width * 2 - 1, pos[1] / self.height * 2 - 1)
-        size_ndc = (text_width / self.width, text_height / self.height)
-        image_display.set_position(pos_ndc, size_ndc)
+        # size_ndc = (text_width / self.width, text_height / self.height)
 
-        if background_color is not None:
-            PIL_image = Image.new('RGBA', (text_width - offset_x, text_height - offset_y), color=tuple((np.array(background_color)*255).astype(np.uint8)))
-        else:
-            PIL_image = Image.new('RGBA', (text_width - offset_x, text_height - offset_y), color=(0, 0, 0, 0))
-        draw = ImageDraw.Draw(PIL_image)
-        draw.text((-offset_x, -offset_y), text, font=self.font, fill=color)
-        image_display.set_texture(PIL_image.transpose(Image.FLIP_TOP_BOTTOM))
-        image_display.draw(None)
+        # Compute vertices for the quad (4 vertices for each character)
+        line_num = 0
+        verts = np.array([]).astype(np.float32)
+        ch_pos = 0
+        for ch in text:
+            if ch == "\n":
+                line_num += 1
+                ch_pos = 0
+                continue
+            y0 = pos_ndc[1] - line_num * line_height * scale
+            y1 = y0 + line_height * scale
+            x0 = ch_pos * char_width * scale + pos_ndc[0]
+            x1 = x0 + char_width * scale
+            (u0, v0, u1, v1) = self.font_texture_uv[ch]
+            p0 = np.array([x0, y0, u0, v0, 0, 0, 0, 0]).astype(np.float32)
+            p1 = np.array([x1, y0, u1, v0, 0, 0, 0, 0]).astype(np.float32)
+            p2 = np.array([x1, y1, u1, v1, 0, 0, 0, 0]).astype(np.float32)
+            p3 = np.array([x0, y1, u0, v1, 0, 0, 0, 0]).astype(np.float32)
+            verts = np.concatenate((verts, p0, p1, p2, p2, p3, p0))
+            ch_pos += 1
+
+        self.text_display.set_vertices(verts)
+        self.text_display.draw(None)
 
     def draw_line(self, a, b, color, thickness, write_on_depth_buffer=True):
         if not write_on_depth_buffer:
@@ -1132,6 +1173,9 @@ class CGeometry(object):
             # self.prog['id'].value = np.random.randint(0, 2**24) & 0xffffffff  # TODO: This random is for debug
             self.prog['id'].value = id & 0xffffffff
 
+        if 'normal_colors' in self.prog:
+            self.prog['normal_colors'].value = 0
+
         if self.draw_mode is not None:
             mode = self.draw_mode
         self.vao.render(mode)
@@ -1226,3 +1270,14 @@ class CImage(CGeometry):
             mode = self.draw_mode
         self.vao.render(mode)
         self.ctx.enable(mgl.DEPTH_TEST)
+
+    def set_vertices(self, vertex_data):
+        if self.vbo is not None:
+            self.vbo.release()
+            self.vbo = None
+        if self.vao is not None:
+            self.vao.release()
+            self.vao = None
+
+        self.vbo = self.ctx.buffer(vertex_data)
+        self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '2f 2f 4f', 'in_vert', 'in_text', 'in_color')])
