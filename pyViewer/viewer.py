@@ -657,12 +657,12 @@ class CScene(object):
         self.height = height
 
         # Single framebuffer for the demo NUC, for some reason the demo NUC does not support separate framebuffers
-        self.fbo = self.ctx.simple_framebuffer((self.width, self.height))
+        # self.fbo = self.ctx.simple_framebuffer((self.width, self.height))
 
         # Separated framebuffers enable offscreen render and depth image
-        # self.renderbuff = self.ctx.renderbuffer((self.width, self.height))
-        # self.depthbuff = self.ctx.depth_renderbuffer((self.width, self.height))
-        # self.fbo = self.ctx.framebuffer(color_attachments=[self.renderbuff], depth_attachment=self.depthbuff)
+        self.renderbuff = self.ctx.renderbuffer((self.width, self.height))
+        self.depthbuff = self.ctx.depth_renderbuffer((self.width, self.height))
+        self.fbo = self.ctx.framebuffer(color_attachments=[self.renderbuff], depth_attachment=self.depthbuff)
         self.fbo.use()
 
         self.wm = window_manager
@@ -702,7 +702,7 @@ class CScene(object):
         self.perspective = np.matmul(ndc_matrix, proj_matrix)
 
         fonts_path = str(Path(__file__).resolve().parent) + "/../fonts/FiraCode-Medium.ttf"
-        self.set_font(font_path=fonts_path, font_size=64)
+        self.set_font(font_path=fonts_path, font_size=48)
 
         self.segment_program = self.ctx.program(vertex_shader=semantic_vertex_shader, fragment_shader=semantic_fragment_shader)
         self.geometry_program = self.ctx.program(vertex_shader=geometry_vertex_shader, fragment_shader=geometry_fragment_shader)
@@ -962,6 +962,34 @@ class CScene(object):
             print(e)
             return np.zeros((self.width, self.height, 4))
 
+    def get_semantic_image(self):
+
+        visibility = [False] * len(self.nodes)
+        for i, n in enumerate(self.nodes):
+            if n.geom is not None and isinstance(n.geom, CGeometry) and not isinstance(n.geom, CImage):
+                visibility[i] = n.visible
+                n.set_is_visible(True)
+            else:
+                visibility[i] = n.visible
+                n.set_is_visible(False)
+
+        self.clear(0, 0, 0, 0)
+        self.draw()
+
+        for i, n in enumerate(self.nodes):
+            n.set_is_visible(visibility[i])
+
+        try:
+            img_buffer = np.frombuffer(
+                self.fbo.read(viewport=self.ctx.viewport, components=4, dtype='f1', attachment=0),
+                dtype=np.dtype('uint8')).reshape(self.width, self.height, 4)
+
+            return img_buffer
+
+        except ValueError as e:
+            print(e)
+            return np.zeros((self.width, self.height, 4))
+
     def process_event(self, event):
         self.camera.process_event(event)
 
@@ -1119,7 +1147,7 @@ class CGeometry(object):
             self.fragment_shader = default_fragment_shader
         self.prog = self.ctx.program(vertex_shader=self.vertex_shader, fragment_shader=self.fragment_shader)
         self.draw_mode = None
-        self.texture = None
+        self.texture = self.ctx.texture(size=(16, 16), components=4, data=np.zeros((16,16,4), dtype=np.uint8).tobytes())
 
     def set_texture(self, path):
         texture_image = Image.open(path).transpose(Image.FLIP_TOP_BOTTOM).convert('RGBA')
@@ -1163,11 +1191,11 @@ class CGeometry(object):
         if 'Mvp' in self.prog:
             self.prog['Mvp'].value = tuple(np.array(mvp, np.float32).reshape(-1, order='F'))
 
+        tex_id = np.array(0, np.uint16)
         if 'Texture' in self.prog:
-            tex_id = np.array(0, np.uint16)
             self.prog['Texture'].value = tex_id
-            if self.texture is not None:
-                self.texture.use(tex_id)
+        if self.texture is not None:
+            self.texture.use(tex_id)
 
         if 'id' in self.prog:
             # self.prog['id'].value = np.random.randint(0, 2**24) & 0xffffffff  # TODO: This random is for debug
@@ -1263,6 +1291,7 @@ class CImage(CGeometry):
         tex_id = np.array(0, np.uint16)
         if 'Texture' in self.prog:
             self.prog['Texture'].value = tex_id
+
         if self.texture is not None:
             self.texture.use(tex_id)
 

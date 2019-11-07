@@ -23,9 +23,9 @@ def interactive_example():
     n_targets = 10
     lower = np.array([0.2, -0.4, 0.2, 0, 0, 0])  # Random object pos(x,y,z) and rot(x,y,z) boundaries
     upper = np.array([0.7, 0.4, 0.25, np.pi, np.pi, np.pi])
-    object_pool_path = ["../models/duck/duck_vhacd.obj", "../models/intel_cup/intel_cup.obj"]
+    object_pool_path = ["../models/duck/duck.obj", "../models/intel_cup/intel_cup.obj"]
     for i in range(n_targets):
-        objects_path.append(object_pool_path[np.random.randint(0, len(object_pool_path)-1)])
+        objects_path.append(object_pool_path[np.random.randint(0, len(object_pool_path))])
         objects_pose.append(np.random.uniform(lower, upper))
 
     #####################################################
@@ -35,6 +35,8 @@ def interactive_example():
     scene = CScene(name='Intel Labs::SSR::VU Depth Renderer. javier.felip.leon@intel.com',
                    width=640, height=480,
                    window_manager=CGLFWWindowManager(), options=pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE)
+
+    scene.set_font(font_size=52, font_color=(255, 0, 0, 255))
 
     # Optional: Define the camera parameters (e.g. from a Realsense D435 camera @ VGA resolution)
     camera_K = np.array([[613.223, 0.      , 313.568],
@@ -134,11 +136,11 @@ def interactive_example():
         timings["read_depth"] = time.time() - tic
 
         # Get the semantic segmentation image
-        # tic = time.time()
-        # seg_image = scene.get_render_image()
-        # texture_image = Image.frombytes("RGBA", seg_image.shape[0:2], seg_image)
-        # image_seg_display.set_texture(texture_image)
-        # timings["read_segmented"] = time.time() - tic
+        tic = time.time()
+        seg_image = scene.get_semantic_image()
+        texture_image = Image.frombytes("RGBA", seg_image.shape[0:2], seg_image)
+        image_seg_display.set_texture(texture_image)
+        timings["read_segmented"] = time.time() - tic
 
         timings["all"] = time.time() - t_ini
         print(timings)
