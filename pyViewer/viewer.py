@@ -3,7 +3,7 @@ import numpy as np
 import transformations as tf
 import moderngl as mgl
 import PIL
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageColor
 import pygame
 from pyglfw import pyglfw
 from pathlib import Path
@@ -21,6 +21,7 @@ TODO:
 - Fix lighting?
 - Floating text
 - Primitive geometry makers
+- Implement a proper semantic segmentation on an auxiliar buffer and
 
 - GUI
     - Screenshot button
@@ -105,6 +106,52 @@ void main()
 }
 '''
 
+semantic_vertex_shader = '''
+#version 330 core
+
+uniform mat4 Mvp;
+
+in vec3 in_vert;
+in vec3 in_norm;
+in vec3 in_text;
+in vec4 in_color;
+
+uniform uint id;
+out vec4 v_color;
+
+void main()
+{
+    // This dummy is to prevent the compiler optimizing out the unused
+    // variables, they are not needed but because the data for the meshes
+    // is re-used by this shader the data layout has to be the same and
+    // include normals, textures and color. 
+    vec4 dummy = vec4((in_norm + in_text), 0) + in_color;
+     
+    v_color = vec4( float(id & 0x000000ffu)/255.0, 
+                    float((id & 0x0000ff00u) >> 8)/255.0, 
+                    float((id & 0x00ff0000u) >> 16)/255.0, 
+                    1.0);
+    if ( id < 0u )
+    {
+        v_color = v_color + dummy * 0.00001;
+    }
+	gl_Position = Mvp * vec4(in_vert, 1.0);
+}
+'''
+
+semantic_fragment_shader = '''
+#version 330 core
+
+in vec4 v_color;
+out vec4 f_color;
+
+void main()
+{
+    f_color = v_color;
+}
+'''
+
+
 image_vertex_shader = '''
 #version 330 core
 layout (location=0) in vec2 in_vert;
@@ -139,6 +186,11 @@ void main()
         discard;
 }
 '''
+
+# default_vertex_shader = semantic_vertex_shader
+# default_fragment_shader = semantic_fragment_shader
+default_vertex_shader = geometry_vertex_shader
+default_fragment_shader = geometry_fragment_shader
 
 
 class CTransform(object):
@@ -586,6 +638,11 @@ class CGLFWWindowManager(CWindowManager):
     def get_mouse_pos(self):
         pos = self.window.cursor_pos
         return pos
+
+    def close(self):
+        self.window.close()
+        pyglfw.terminate()
+
 ############################################################################################################
 # END OF WINDOW MANAGER IMPLEMENTATIONS
 ############################################################################################################
@@ -599,12 +656,20 @@ class CScene(object):
         self.width = width
         self.height = height
 
+        # self.fbo_aux = self.ctx.simple_framebuffer((self.width, self.height))
         self.fbo = self.ctx.simple_framebuffer((self.width, self.height))
+        self.fbo.use()
 
         # For some reason the demo NUC does not support separate framebuffers
         # self.renderbuff = self.ctx.renderbuffer((self.width, self.height))
         # self.depthbuff = self.ctx.depth_renderbuffer((self.width, self.height))
         # self.fbo = self.ctx.framebuffer(color_attachments=[self.renderbuff], depth_attachment=self.depthbuff)
+        # self.fbo.use()
+
+        # # Set an auxiliar renderbuffer for offscreen operations
+        # self.depthbuff_aux = self.ctx.depth_renderbuffer((self.width, self.height))
+        # self.renderbuff_aux = self.ctx.renderbuffer((self.width, self.height))
+        # self.fbo_aux = self.ctx.framebuffer(color_attachments=[self.renderbuff], depth_attachment=self.depthbuff)
 
         self.wm = window_manager
 
@@ -614,6 +679,12 @@ class CScene(object):
         self.ctx.viewport = (0, 0, self.width, self.height)
         self.root = CNode(id=0, parent=None, transform=CTransform(), geometry=None, material=None)
         self.nodes = [self.root]
+
+        # TODO: BUG this two lines are a dirty solution of a problem that gets the first inserted node to
+        # set the id of the root node. By having a child of the root and building the scene from there it is
+        # temporarily fixed
+        dummy_node = CNode(id=None, parent=None, transform=CTransform(), geometry=None, material=None)
+        self.insert_graph([dummy_node])
 
         self.camera = CCamera(width=width, height=height, focal_px=650)
         self.render_mode = mgl.TRIANGLES
@@ -639,9 +710,16 @@ class CScene(object):
         fonts_path = str(Path(__file__).resolve().parent) + "/../fonts/FiraCode-Medium.ttf"
         self.font = ImageFont.truetype(fonts_path, 28)
 
-    # def __del__(self):
-    #     self.fbo.release()
-    #     self.ctx.release()
+        self.segment_program = self.ctx.program(vertex_shader=semantic_vertex_shader, fragment_shader=semantic_fragment_shader)
+        self.geometry_program = self.ctx.program(vertex_shader=geometry_vertex_shader, fragment_shader=geometry_fragment_shader)
+
+        # time.sleep(0.1)
+
+    def __del__(self):
+        self.wm.close()
+        self.ctx.finish()
+        self.fbo.release()
+        self.ctx.release()
 
     #############################################################
     # GENERIC INITIALIZATION METHODS. WRAPPER TO HANDLE MULTIPLE WINDOW MANAGERS (pygame, pyglfw, ...)
@@ -703,7 +781,8 @@ class CScene(object):
     #     persp[3, 2] = -1
     #     return persp
 
-    def compute_projection_matrix(self, fx, fy, cx, cy, near, far, skew=0):
+    @staticmethod
+    def compute_projection_matrix(fx, fy, cx, cy, near, far, skew=0):
         proj = np.eye(4)
         proj[0, 0] = fx
         proj[1, 1] = fy
@@ -720,10 +799,11 @@ class CScene(object):
     def insert_graph(self, nodes):
         assert self.root is not None
         for n in nodes:
-            n.id = len(self.nodes)
+            if n.id is None:
+                n.id = len(self.nodes)
             self.nodes.append(n)
             if n.parent is None:
-                n.set_parent(self.root)
+                CNode.set_parent(node=n, parent=self.root)
 
     def clear(self, r=0.0, g=0.2, b=0.2, a=1.0):
         self.ctx.clear(r, g, b, a)
@@ -757,10 +837,9 @@ class CScene(object):
         if camera is None:
             camera = self.camera
 
-        self.ctx.viewport = (0, 0, camera.width, camera.height)
-        # aspect = self.width / float(self.height)
-        # self.perspective = self.compute_perspective_matrix(self.FoV, self.FoV / aspect, self.near, self.far)
+        # self.fbo.use()
 
+        self.ctx.viewport = (0, 0, camera.width, camera.height)
         proj_matrix = self.compute_projection_matrix(camera.fx, camera.fy, camera.cx, camera.cy,
                                                      self.near, self.far, camera.s)
 
@@ -835,6 +914,18 @@ class CScene(object):
             print(e)
             return np.zeros((self.width, self.height))
 
+    def get_render_image(self):
+        try:
+            img_buffer = np.frombuffer(
+                self.fbo.read(viewport=self.ctx.viewport, components=4, dtype='f1', attachment=0),
+                dtype=np.dtype('uint8')).reshape(self.width, self.height, 4)
+
+            return img_buffer
+
+        except ValueError as e:
+            print(e)
+            return np.zeros((self.width, self.height, 4))
+
     def process_event(self, event):
         self.camera.process_event(event)
 
@@ -856,8 +947,6 @@ class CScene(object):
 
         if event.type == CEvent.VIDEORESIZE:
             self.wm.set_window_mode((event.data[1], event.data[2]), options=self.options)
-            aspect = event.data[1] / float(event.data[2])
-            # self.perspective = self.compute_perspective_matrix(self.FoV, self.FoV/aspect, self.near, self.far)
             self.width = event.data[1]
             self.height = event.data[2]
             self.wm.viewport = (0, 0, self.width, self.height)
@@ -869,7 +958,7 @@ class CScene(object):
 
 
 class CNode(object):
-    def __init__(self, id=0, parent=None, transform=CTransform(), geometry=None, material=None):
+    def __init__(self, id=None, parent=None, transform=CTransform(), geometry=None, material=None):
         self.id = id
         self.parent = None
         self.children = []
@@ -880,7 +969,7 @@ class CNode(object):
         self.pybullet_v_mat = np.eye(4)
         self.visible = True
         if parent is not None:
-            self.set_parent(parent)
+            self.set_parent(self, parent)
 
     def get_graph_ids(self):
         res = [self.id]
@@ -888,10 +977,11 @@ class CNode(object):
             res.extend(c.get_graph_ids())
         return res
 
-    def set_parent(self, p):
-        self.parent = p
-        if p is not None:
-            p.children.append(self)
+    @staticmethod
+    def set_parent(node, parent):
+        node.parent = parent
+        if parent is not None:
+            parent.children.append(node)
 
     def set_is_visible(self, visible):
         self.visible = visible
@@ -900,7 +990,7 @@ class CNode(object):
         model = np.matmul(model, self.t.t)
         mvp = np.matmul(perspective, np.matmul(view, model))
         if self.geom is not None and self.visible:
-            self.geom.draw(mvp, mode)
+            self.geom.draw(mvp, mode, id=self.id)
         for c in self.children:
             c.draw(perspective, view, model, mode)
 
@@ -933,6 +1023,12 @@ class CPointCloud(object):
         self.draw_mode = mgl.POINTS
         self.size = 1
 
+    def update_shader(self):
+        if self.vao is not None:
+            self.vao.release()
+            self.vao = None
+        self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
+
     def set_data(self, data):
         if self.vbo is not None:
             self.vbo.release()
@@ -945,7 +1041,7 @@ class CPointCloud(object):
             self.vbo = self.ctx.buffer(data)
             self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
 
-    def draw(self, mvp, mode=mgl.POINTS):
+    def draw(self, mvp, mode=mgl.POINTS, id=0):
         self.prog['Mvp'].value = tuple(np.array(mvp, np.float32).reshape(-1, order='F'))
         if self.draw_mode is not None:
             mode = self.draw_mode
@@ -970,7 +1066,6 @@ class CPointCloud(object):
             self.prog = None
 
 
-
 class CGeometry(object):
     def __init__(self, ctx, vshader=None, fshader=None):
         self.ctx = ctx
@@ -981,14 +1076,18 @@ class CGeometry(object):
         if vshader is not None:
             self.vertex_shader = open(vshader).read()
         else:
-            self.vertex_shader = geometry_vertex_shader
+            self.vertex_shader = default_vertex_shader
         if fshader is not None:
             self.fragment_shader = open(fshader).read()
         else:
-            self.fragment_shader = geometry_fragment_shader
+            self.fragment_shader = default_fragment_shader
         self.prog = self.ctx.program(vertex_shader=self.vertex_shader, fragment_shader=self.fragment_shader)
         self.draw_mode = None
         self.texture = None
+        self.index_to_color = list(ImageColor.colormap.values())
+        self.color_to_index = dict()
+        for i, c in enumerate(self.index_to_color):
+            self.color_to_index[c] = i
 
     def set_texture(self, path):
         texture_image = Image.open(path).transpose(Image.FLIP_TOP_BOTTOM).convert('RGBA')
@@ -996,6 +1095,15 @@ class CGeometry(object):
         self.texture = self.ctx.texture(size=texture_image.size, components=4, data=texture_image_data)
         self.texture.build_mipmaps()
         self.texture.filter = (mgl.LINEAR_MIPMAP_LINEAR, mgl.LINEAR)
+
+    def update_shader(self):
+        if self.vao is not None:
+            self.vao.release()
+            self.vao = None
+        if self.ibo is not None:
+            self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 3f 3f 4f', 'in_vert', 'in_norm', 'in_text', 'in_color')], index_buffer=self.ibo)
+        else:
+            self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 3f 3f 4f', 'in_vert', 'in_norm', 'in_text', 'in_color')])
 
     def set_data(self, data, indices=None):
         self.data = data
@@ -1015,14 +1123,23 @@ class CGeometry(object):
         else:
             self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 3f 3f 4f', 'in_vert', 'in_norm', 'in_text', 'in_color')])
 
-    def draw(self, mvp, mode=mgl.TRIANGLE_STRIP):
+    def draw(self, mvp, mode=mgl.TRIANGLE_STRIP, id=0):
         # TODO: Extract lights outside
-        self.prog['Light'].value = (1.0, 1.0, 3.0)
-        self.prog['Mvp'].value = tuple(np.array(mvp, np.float32).reshape(-1, order='F'))
-        tex_id = np.array(0, np.uint16)
-        self.prog['Texture'].value = tex_id
-        if self.texture is not None:
-            self.texture.use(tex_id)
+        if 'Light' in self.prog:
+            self.prog['Light'].value = (1.0, 1.0, 3.0)
+
+        if 'Mvp' in self.prog:
+            self.prog['Mvp'].value = tuple(np.array(mvp, np.float32).reshape(-1, order='F'))
+
+        if 'Texture' in self.prog:
+            tex_id = np.array(0, np.uint16)
+            self.prog['Texture'].value = tex_id
+            if self.texture is not None:
+                self.texture.use(tex_id)
+
+        if 'id' in self.prog:
+            # self.prog['id'].value = np.random.randint(0, 2**24) & 0xffffffff  # TODO: This random is for debug
+            self.prog['id'].value = id & 0xffffffff
 
         if self.draw_mode is not None:
             mode = self.draw_mode
@@ -1039,9 +1156,9 @@ class CGeometry(object):
         if self.ibo is not None:
             self.ibo.release()
             self.ibo = None
-        if self.prog is not None:
-            self.prog.release()
-            self.prog = None
+        # if self.prog is not None:
+        #     self.prog.release()
+        #     self.prog = None
 
 
 class CImage(CGeometry):
@@ -1106,10 +1223,11 @@ class CImage(CGeometry):
         self.texture.build_mipmaps()
         self.texture.filter = (mgl.LINEAR_MIPMAP_LINEAR, mgl.LINEAR)
 
-    def draw(self, mvp, mode=mgl.TRIANGLES):
+    def draw(self, mvp, mode=mgl.TRIANGLES, id=0):
         self.ctx.disable(mgl.DEPTH_TEST)
         tex_id = np.array(0, np.uint16)
-        self.prog['Texture'].value = tex_id
+        if 'Texture' in self.prog:
+            self.prog['Texture'].value = tex_id
         if self.texture is not None:
             self.texture.use(tex_id)
 

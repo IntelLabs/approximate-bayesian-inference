@@ -33,8 +33,16 @@ def interactive_example():
     #####################################################
     # Load scene
     scene = CScene(name='Intel Labs::SSR::VU Depth Renderer. javier.felip.leon@intel.com',
-                   width=800, height=600,
+                   width=640, height=480,
                    window_manager=CGLFWWindowManager(), options=pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE)
+
+    # Optional: Define the camera parameters (e.g. from a Realsense D435 camera @ VGA resolution)
+    camera_K = np.array([[613.223, 0.      , 313.568],
+                         [0.     , 613.994 , 246.002],
+                         [0.     , 0.      , 1.0    ]])
+
+    scene.camera.set_intrinsics(scene.width, scene.height,
+                                camera_K[0, 0], camera_K[1, 1], camera_K[0, 2], camera_K[1, 2], camera_K[0, 1])
 
     # Example reference frame size 1.0
     nodes1 = CNode(geometry=make_mesh(scene.ctx, REFERENCE_FRAME_MESH, scale=1.0))
@@ -62,6 +70,13 @@ def interactive_example():
     imgnode = CNode(geometry=image_display)
     scene.insert_graph([imgnode])
 
+    # Example image node for the semantic segmentation
+    image_seg_display = CImage(scene.ctx)
+    image_seg_display.set_texture("../textures/intel_labs.png")
+    image_seg_display.set_position((-1, 0.2), (0.4, 0.4))
+    imgseg_node = CNode(geometry=image_seg_display)
+    scene.insert_graph([imgseg_node])
+
     #####################################################
     # Main Loop
     #####################################################
@@ -81,8 +96,8 @@ def interactive_example():
 
         tic = time.time()
 
-        scene.clear()
         # Draw scene
+        scene.clear()
         scene.draw()
 
         timings["draw"] = time.time() - tic
@@ -117,8 +132,17 @@ def interactive_example():
         depth_image = Image.frombytes("F", depth_image.shape, depth_image).transpose(Image.FLIP_TOP_BOTTOM)
         timings["read_depth"] = time.time() - tic
 
+        # Get the semantic segmentation image
+        # tic = time.time()
+        # seg_image = scene.get_render_image()
+        # texture_image = Image.frombytes("RGBA", seg_image.shape[0:2], seg_image)
+        # image_seg_display.set_texture(texture_image)
+        # timings["read_segmented"] = time.time() - tic
+
         timings["all"] = time.time() - t_ini
         print(timings)
+
+        time.sleep(0.001)
 
 
 if __name__ == "__main__":

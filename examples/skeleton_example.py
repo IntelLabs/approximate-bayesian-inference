@@ -129,6 +129,7 @@ def skeleton_example():
 
         timings["all"] = time.time() - t_ini
         print(timings)
+        time.sleep(0.001)
 
 
 if __name__ == "__main__":
