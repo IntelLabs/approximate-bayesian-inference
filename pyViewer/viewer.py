@@ -5,6 +5,8 @@ import transformations as tf
 import moderngl as mgl
 import PIL
 from PIL import Image, ImageDraw, ImageFont, ImageColor
+from PIL import ImageFilter
+
 import pygame
 from pyglfw import pyglfw
 from pathlib import Path
@@ -314,7 +316,6 @@ class CCamera(object):
                 pass
 
     def look_at(self, focus=(0, 0, 0), up=(0, 0, 1)):
-
         position = np.array([0.0, 0.0, 0.0])
         alpha = self.alpha
         if alpha > np.pi:
@@ -503,12 +504,15 @@ class CPygameWindowManager(CWindowManager):
 
 
 class CGLFWWindowManager(CWindowManager):
-    def init_display(self):
+    def init_display(self, fullscreen=False):
         if not pyglfw.init():
             os.sys.exit(1)
 
         pyglfw.Window.hint(visible=False)
-        self.window = pyglfw.Window(200, 200, "")
+        if fullscreen:
+            self.window = pyglfw.Window(200, 200, "", pyglfw.get_primary_monitor())
+        else:
+            self.window = pyglfw.Window(200, 200, "", )
         self.window.make_current()
         self.window.show()
         self.window.set_key_callback(CGLFWWindowManager.key_callback)
@@ -627,7 +631,7 @@ class CGLFWWindowManager(CWindowManager):
 
     def draw(self):
         self.window.swap_buffers()
-        self.window.show()
+        # self.window.show()
 
     def set_window_mode(self, size, options=None):
         self.window.size = size
@@ -649,7 +653,7 @@ class CGLFWWindowManager(CWindowManager):
 
 
 class CScene(object):
-    def __init__(self, name="PyViewer", width=800, height=600, location=(0, 0), window_manager=CGLFWWindowManager(), near=0.001, far = 100.0, options=None):
+    def __init__(self, name="PyViewer", width=800, height=600, location=(0, 0), window_manager=CGLFWWindowManager(), near=0.001, far = 100.0, options=None, fullscreen=False):
         print("ModernGL: ", mgl.__version__)
         self.ctx = mgl.create_standalone_context()
         # self.ctx = mgl.create_context()  # Use this when binding to an existing OpenGL context
@@ -658,23 +662,23 @@ class CScene(object):
         self.height = height
 
         # Single framebuffer for the demo NUC, for some reason the demo NUC does not support separate framebuffers
-        # self.fbo = self.ctx.simple_framebuffer((self.width, self.height))
+        self.fbo = self.ctx.simple_framebuffer((self.width, self.height))
 
         # Auxiliar framebuffer for offscreen rendering. e.g. semantic segmented scene
-        self.renderbuff_aux = self.ctx.renderbuffer((self.width, self.height))
-        self.depthbuff_aux = self.ctx.depth_renderbuffer((self.width, self.height))
-        self.fbo_aux = self.ctx.framebuffer(color_attachments=[self.renderbuff_aux], depth_attachment=self.depthbuff_aux)
+        # self.renderbuff_aux = self.ctx.renderbuffer((self.width, self.height))
+        # self.depthbuff_aux = self.ctx.depth_renderbuffer((self.width, self.height))
+        # self.fbo_aux = self.ctx.framebuffer(color_attachments=[self.renderbuff_aux], depth_attachment=self.depthbuff_aux)
 
         # Separated framebuffers enable offscreen render and depth image
-        self.renderbuff = self.ctx.renderbuffer((self.width, self.height))
-        self.depthbuff = self.ctx.depth_renderbuffer((self.width, self.height))
-        self.fbo = self.ctx.framebuffer(color_attachments=[self.renderbuff], depth_attachment=self.depthbuff)
-        self.fbo.use()
+        # self.renderbuff = self.ctx.renderbuffer((self.width, self.height))
+        # self.depthbuff = self.ctx.depth_renderbuffer((self.width, self.height))
+        # self.fbo = self.ctx.framebuffer(color_attachments=[self.renderbuff], depth_attachment=self.depthbuff)
+        # self.fbo.use()
 
         self.wm = window_manager
 
         self.options = options
-        self.init_display(name, width, height, location, options)
+        self.init_display(name, width, height, location=location, options=options, fullscreen=fullscreen)
 
         self.ctx.viewport = (0, 0, self.width, self.height)
         self.root = CNode(id=0, parent=None, transform=CTransform(), geometry=None, material=None)
@@ -707,8 +711,7 @@ class CScene(object):
 
         self.perspective = np.matmul(ndc_matrix, proj_matrix)
 
-        fonts_path = str(Path(__file__).resolve().parent) + "/../fonts/FiraCode-Medium.ttf"
-        self.set_font(font_path=fonts_path, font_size=48)
+        self.set_font(font_path=None, font_size=48)
 
         self.segment_program = self.ctx.program(vertex_shader=semantic_vertex_shader, fragment_shader=semantic_fragment_shader)
         self.geometry_program = self.ctx.program(vertex_shader=geometry_vertex_shader, fragment_shader=geometry_fragment_shader)
@@ -725,9 +728,9 @@ class CScene(object):
     # GENERIC INITIALIZATION METHODS. WRAPPER TO HANDLE MULTIPLE WINDOW MANAGERS (pygame, pyglfw, ...)
     # current window manager = glfw
     #############################################################
-    def init_display(self, name, width, height, location, options=None):
+    def init_display(self, name, width, height, location, options=None, fullscreen=False):
         os.environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % location  # TODO: Verify this is not platform specific
-        self.wm.init_display()
+        self.wm.init_display(fullscreen=fullscreen)
 
         self.width = width
         self.height = height
@@ -853,7 +856,9 @@ class CScene(object):
         self.root.draw(self.perspective, camera.camera_matrix, np.eye(4), self.render_mode)
         self.ctx.finish()
 
-    def set_font(self, font_path="../fonts/FiraCode-Medium.ttf", font_size=64, font_color=(255,255,255,255), background_color=(0,0,0,0)):
+    def set_font(self, font_path=None, font_size=64, font_color=(255,255,255,255), background_color=(0,0,0,0)):
+        if font_path is None:
+            font_path = str(Path(__file__).resolve().parent) + "/../fonts/FiraCode-Medium.ttf"
         self.font = ImageFont.truetype(font_path, font_size)
         self.font_texture_map, self.font_texture_uv = self.make_font_texture(self.font, font_color, background_color)
         self.char_width, self.line_height = self.font.getsize("A")
@@ -865,13 +870,18 @@ class CScene(object):
         uv_coords = {}
         text = string.printable
 
-        # Generate a texture image with back background and white text
+        # Generate a texture image with desired background and text colors
         text_width, text_height = font.getsize(text)
-        (width, baseline), (offset_x, offset_y) = font.font.getsize(text)
-        texmap = Image.new('RGBA', (text_width - offset_x, text_height - offset_y), color=background_color)
-        draw = ImageDraw.Draw(texmap)
-        draw.text((-offset_x, -offset_y), text, font=font, fill=font_color)
-        # texmap.show()
+        texmap = font.getmask(text, mode='L')
+        text_idx = (np.array(texmap, dtype=np.uint8) > 0).reshape((texmap.size[1], texmap.size[0]))
+        back_idx = (np.array(texmap, dtype=np.uint8) == 0).reshape((texmap.size[1], texmap.size[0]))
+        texarray = np.zeros((texmap.size[1], texmap.size[0], 4), dtype=np.uint8)
+        texarray[text_idx,:] = font_color
+        texarray[back_idx,:] = background_color
+
+        # Form the image with antialiasing
+        teximg = Image.fromarray(np.array(texarray), mode="RGBA").filter(ImageFilter.SMOOTH_MORE)
+
 
         # TODO: This assumes fixed width characters, compute per-character width to enable variable width typefaces
         # Compute each character coordinates
@@ -883,10 +893,9 @@ class CScene(object):
             u1 = u0 + char_width / text_width
             uv_coords[s] = (u0, v0, u1, v1)
 
-        return texmap, uv_coords
+        return teximg, uv_coords
 
     # TODO: Enable camera facing text rendering
-    # TODO: Alpha blending not working
     def draw_text(self, text, pos, scale=1):
         # Get text height and width and transofrm them to NDC
         char_width = self.char_width / self.width
@@ -981,13 +990,13 @@ class CScene(object):
                 n.set_is_visible(False)
 
         # Activate the auxiliar framebuffer to render the semantic image
-        self.fbo_aux.use()
+        # self.fbo_aux.use()
         self.clear(0, 0, 0, 0)
         self.draw()
         self.ctx.finish()
 
         # Activate the main framebuffer after the semantic render has been done
-        self.fbo.use()
+        # self.fbo.use()
 
         for i, n in enumerate(self.nodes):
             n.set_is_visible(visibility[i])
@@ -995,7 +1004,9 @@ class CScene(object):
         img_buffer = np.zeros((self.width, self.height, 4))
         try:
             img_buffer = np.frombuffer(
-                self.fbo_aux.read(viewport=self.ctx.viewport, components=4, dtype='f1', attachment=1),
+                # self.fbo_aux.read(viewport=self.ctx.viewport, components=4, dtype='f1', attachment=1),
+                # dtype=np.dtype('uint8')).reshape(self.width, self.height, 4)
+                self.fbo.read(viewport=self.ctx.viewport, components=4, dtype='f1', attachment=1),
                 dtype=np.dtype('uint8')).reshape(self.width, self.height, 4)
         except ValueError as e:
             print(e)
@@ -1295,8 +1306,9 @@ class CImage(CGeometry):
             self.texture = None
 
         self.texture = self.ctx.texture(size=texture_image.size, components=4, data=texture_image_data)
-        self.texture.build_mipmaps()
-        self.texture.filter = (mgl.LINEAR_MIPMAP_LINEAR, mgl.LINEAR)
+        # self.texture.build_mipmaps()
+        self.texture.filter = (mgl.LINEAR, mgl.LINEAR)
+        # self.texture.anisotropy = 64.0
 
     def draw(self, mvp, mode=mgl.TRIANGLES, id=0):
         self.ctx.disable(mgl.DEPTH_TEST)

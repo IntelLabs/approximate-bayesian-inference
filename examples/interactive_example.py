@@ -36,7 +36,7 @@ def interactive_example():
                    width=640, height=480,
                    window_manager=CGLFWWindowManager(), options=pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE)
 
-    scene.set_font(font_size=52, font_color=(255, 255, 255, 255), background_color=(100, 100, 100, 255))
+    scene.set_font(font_size=64, font_color=(255, 255, 255, 255), background_color=(0, 0, 0, 0))
 
     # Optional: Define the camera parameters (e.g. from a Realsense D435 camera @ VGA resolution)
     camera_K = np.array([[613.223, 0.      , 313.568],
@@ -98,7 +98,8 @@ def interactive_example():
 
         # Get the semantic segmentation image before drawing the scene
         tic = time.time()
-        seg_image = scene.get_semantic_image()
+        # seg_image = scene.get_semantic_image()
+        seg_image = scene.get_render_image()
         texture_image = Image.frombytes("RGBA", seg_image.shape[0:2], seg_image)
         image_seg_display.set_texture(texture_image)
         timings["read_segmented"] = time.time() - tic
@@ -119,9 +120,11 @@ def interactive_example():
         mouse_y = int(scene.wm.get_mouse_pos()[1])
         if depth_image is not None:
             if 0 < mouse_x < depth_image.width and 0 < mouse_y < depth_image.height:
-                scene.draw_text("Depth (%d, %d): %.3f" % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))), (20, 60), scale=0.6)
+                scene.draw_text("Depth (%d, %d): %.3f" % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))), (20, 60), scale=1)
                 # print(" Depth (%d, %d): %.3f " % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))))
-        scene.draw_text(repr(timings), (20, 20), scale=0.6)
+
+        scene.draw_text(str({k: str(round(v*1000.0, 3))+"ms" if isinstance(v, float) else v for k, v in timings.items()}), (20, 20), scale=0.5)
+
         timings["text"] = time.time() - tic
 
         scene.swap_buffers()

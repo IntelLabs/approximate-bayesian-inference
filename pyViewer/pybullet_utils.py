@@ -94,7 +94,7 @@ def make_pybullet_scene(ctx, physicsClientId=0):
     nbodies = p.getNumBodies(physicsClientId=physicsClientId)
     for i in range(nbodies):
         node = make_pybullet_node(ctx, i, physicsClientId)
-        node[0].set_parent(root)
+        node[0].set_parent(node=node[0], parent=root)
         nodes.extend(node)
     return nodes
 
@@ -112,7 +112,7 @@ def make_pybullet_node(ctx, body_id, physicsClientId=0):
             print("---- Link idx: %d Shape file: " % link_id + str(mesh_file))
             node = CNode(geometry=make_mesh(ctx, mesh_file))
             node_frame = CNode(geometry=make_mesh(ctx, REFERENCE_FRAME_MESH, scale=0.05))
-            node_frame.set_parent(node)
+            node_frame.set_parent(node=node_frame, parent=node)
             node.pybullet_id = body_id
             node.pybullet_link_id = link_id
             nodes.append(node)
