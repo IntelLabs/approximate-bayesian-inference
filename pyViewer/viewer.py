@@ -6,6 +6,8 @@ import moderngl as mgl
 import PIL
 from PIL import Image, ImageDraw, ImageFont, ImageColor
 from PIL import ImageFilter
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+import copy
 
 import pygame
 from pyglfw import pyglfw
@@ -25,6 +27,7 @@ TODO:
 - Floating text
 - Primitive geometry makers
 - Implement a proper semantic segmentation on an auxiliar buffer
+- Implement transparency handling by ordering the rendered objects by distance to the camera
 
 - GUI
     - Screenshot button
@@ -189,6 +192,38 @@ void main()
 }
 '''
 
+# Plot line shaders adapted from
+# https://vitaliburkov.wordpress.com/2016/09/17/simple-and-fast-high-quality-antialiased-lines-with-opengl/
+plot_vertex_shader = '''
+#version 330 core
+
+in vec3 in_vert;
+in vec4 in_color;
+
+out vec3 v_vert;
+out vec4 v_color;
+
+uniform mat4 Mvp;
+
+void main() {
+	v_vert = in_vert;
+	v_color = in_color;
+    gl_Position = Mvp * vec4(v_vert, 1.0);
+}
+'''
+
+plot_fragment_shader = '''
+#version 330 core
+in vec3 v_vert;
+in vec4 v_color;
+out vec4 f_color;
+
+void main()
+{
+    f_color = v_color;
+}
+'''
+
 # default_vertex_shader = semantic_vertex_shader
 # default_fragment_shader = semantic_fragment_shader
 default_vertex_shader = geometry_vertex_shader
@@ -209,6 +244,12 @@ class CTransform(object):
 
     def __repr__(self):
         return " pos: " + repr(tuple(self.t[0:3, 3])) + " rot: " + repr(tf.euler_from_matrix(self.t))
+
+    def get_position(self):
+        return self.t[0:3, 3].reshape(1, 3)
+
+    def set_position(self, trans):
+        self.t[0:3, 3] = trans
 
     def look_at(self, focus=(0, 0, 0), up=(0, 0, 1)):
         z_vec = focus - self.t[0:3, 3]
@@ -272,6 +313,11 @@ class CCamera(object):
                 self.focus_point = self.focus_point + np.array([0, -0.1, 0.0])
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
 
+            if event.data[0] == pygame.K_v:
+                print("CAMERA PARAMETERS")
+                print("Camera: a:", self.alpha, " b:", self.beta, " r:", self.r)
+                print("Focus point: ", self.focus_point, " Up vector:", self.up_vector)
+
             if event.data[0] == pygame.K_c:
                 self.alpha = 0.0
                 self.beta = 0.0
@@ -287,11 +333,9 @@ class CCamera(object):
             elif event.data[1] == 4:
                 self.r = self.r - 0.1
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
-                print("Camera: a:", self.alpha, " b:", self.beta, " r:", self.r)
             elif event.data[1] == 5:
                 self.r = self.r + 0.1
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
-                print("Camera: a:", self.alpha, " b:", self.beta, " r:", self.r)
 
         if event.type == CEvent.MOUSEMOTION:
             if event.data[2][0] and np.abs(event.data[1][0]) < 50 and np.abs(event.data[1][1]) < 50:
@@ -304,13 +348,11 @@ class CCamera(object):
                     self.beta = 0
 
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
-                print("Camera: a:", self.alpha, " b:", self.beta, " r:", self.r)
 
             if event.data[2][1] and np.abs(event.data[1][0]) < 50 and np.abs(event.data[1][1]) < 50:
                 self.focus_point = self.focus_point + event.data[1][0] * self.camera_matrix[0, 0:3] * self.sensitivity
                 self.focus_point = self.focus_point + event.data[1][1] * self.camera_matrix[1, 0:3] * self.sensitivity
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
-                print("Camera: focus:", self.focus_point)
 
             if event.data[2][2]:
                 pass
@@ -504,17 +546,20 @@ class CPygameWindowManager(CWindowManager):
 
 
 class CGLFWWindowManager(CWindowManager):
-    def init_display(self, fullscreen=False):
+    def init_display(self, fullscreen=False, shared=None):
+
         if not pyglfw.init():
             os.sys.exit(1)
 
         pyglfw.Window.hint(visible=False)
+        pyglfw.Window.hint(samples=16)
         if fullscreen:
-            self.window = pyglfw.Window(200, 200, "", pyglfw.get_primary_monitor())
+            self.window = pyglfw.Window(200, 200, "", pyglfw.get_primary_monitor(), shared=shared)
         else:
-            self.window = pyglfw.Window(200, 200, "", )
-        self.window.make_current()
+            self.window = pyglfw.Window(200, 200, "", None, shared=shared)
+        self.window.swap_interval(0)
         self.window.show()
+
         self.window.set_key_callback(CGLFWWindowManager.key_callback)
         self.window.set_char_callback(CGLFWWindowManager.char_callback)
         self.window.set_scroll_callback(CGLFWWindowManager.scroll_callback)
@@ -542,7 +587,7 @@ class CGLFWWindowManager(CWindowManager):
         ev.data = (key, scancode, mods)
         ev.key = key
         self.event_queue.append(ev)
-        print("keybrd: key=%s scancode=%s action=%s mods=%s" % (key, scancode, action, mods))
+        # print("keybrd: key=%s scancode=%s action=%s mods=%s" % (key, scancode, action, mods))
 
     def char_callback(self, char):
         pass
@@ -625,13 +670,14 @@ class CGLFWWindowManager(CWindowManager):
             self.window.set_title(str(name).encode("utf8"))
 
     def get_events(self):
+        self.window.make_current()
+        res = copy.deepcopy(self.window.event_queue)
         self.window.event_queue.clear()
-        pyglfw.poll_events()
-        return self.window.event_queue
+        return res
 
     def draw(self):
+        self.window.make_current()
         self.window.swap_buffers()
-        # self.window.show()
 
     def set_window_mode(self, size, options=None):
         self.window.size = size
@@ -645,7 +691,7 @@ class CGLFWWindowManager(CWindowManager):
 
     def close(self):
         self.window.close()
-        pyglfw.terminate()
+        # pyglfw.terminate()
 
 ############################################################################################################
 # END OF WINDOW MANAGER IMPLEMENTATIONS
@@ -653,17 +699,28 @@ class CGLFWWindowManager(CWindowManager):
 
 
 class CScene(object):
-    def __init__(self, name="PyViewer", width=800, height=600, location=(0, 0), window_manager=CGLFWWindowManager(), near=0.001, far = 100.0, options=None, fullscreen=False):
+    def __init__(self, name="PyViewer", width=800, height=600, location=(0, 0), window_manager=CGLFWWindowManager(), near=0.001, far = 100.0, options=None, fullscreen=False, shared=None):
+
+        # The window manager should create the OpenGL context
+        self.wm = window_manager
+        shared_window = None
+        if shared is not None:
+            shared_window = shared.wm.window
+
+        self.init_display(name, width, height, location=location, options=options, fullscreen=fullscreen, shared=shared_window)
+
         print("ModernGL: ", mgl.__version__)
-        self.ctx = mgl.create_standalone_context()
-        # self.ctx = mgl.create_context()  # Use this when binding to an existing OpenGL context
+        # self.ctx = mgl.create_standalone_context()
+        self.ctx = mgl.create_context()  # Use this when binding to an existing OpenGL context
+        # self.ctx.mglo.fbo.use()
+        self.fbo = self.ctx.fbo
 
         self.width = width
         self.height = height
 
         # Single framebuffer for the demo NUC, for some reason the demo NUC does not support separate framebuffers
-        self.fbo = self.ctx.simple_framebuffer((self.width, self.height))
-
+        # self.fbo = self.ctx.simple_framebuffer((self.width, self.height))
+        # self.ctx.fbo = self.fbo
         # Auxiliar framebuffer for offscreen rendering. e.g. semantic segmented scene
         # self.renderbuff_aux = self.ctx.renderbuffer((self.width, self.height))
         # self.depthbuff_aux = self.ctx.depth_renderbuffer((self.width, self.height))
@@ -673,12 +730,10 @@ class CScene(object):
         # self.renderbuff = self.ctx.renderbuffer((self.width, self.height))
         # self.depthbuff = self.ctx.depth_renderbuffer((self.width, self.height))
         # self.fbo = self.ctx.framebuffer(color_attachments=[self.renderbuff], depth_attachment=self.depthbuff)
+        # self.ctx.fbo = self.fbo
         # self.fbo.use()
 
-        self.wm = window_manager
-
         self.options = options
-        self.init_display(name, width, height, location=location, options=options, fullscreen=fullscreen)
 
         self.ctx.viewport = (0, 0, self.width, self.height)
         self.root = CNode(id=0, parent=None, transform=CTransform(), geometry=None, material=None)
@@ -710,6 +765,7 @@ class CScene(object):
                                                self.near, self.far)
 
         self.perspective = np.matmul(ndc_matrix, proj_matrix)
+        self.perspective = ndc_matrix
 
         self.set_font(font_path=None, font_size=48)
 
@@ -728,26 +784,50 @@ class CScene(object):
     # GENERIC INITIALIZATION METHODS. WRAPPER TO HANDLE MULTIPLE WINDOW MANAGERS (pygame, pyglfw, ...)
     # current window manager = glfw
     #############################################################
-    def init_display(self, name, width, height, location, options=None, fullscreen=False):
-        os.environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % location  # TODO: Verify this is not platform specific
-        self.wm.init_display(fullscreen=fullscreen)
-
+    def init_display(self, name, width, height, location, options=None, fullscreen=False, shared=None):
+        self.wm.init_display(fullscreen=fullscreen, shared=shared)
         self.width = width
         self.height = height
         self.wm.set_window_mode((self.width, self.height), options=options)
         self.wm.set_window_name(name)
+        self.wm.window.make_current()
+        self.wm.window.pos = location
+
+    def set_window_pos(self, pos, monitor=None):
+        if monitor is None:
+            monitor = pyglfw.get_primary_monitor()
+        self.wm.window.pos = np.array(pos) + np.array(monitor.pos)
+
+
+    def make_current(self):
+        self.wm.window.make_current()
 
     def swap_buffers(self):
+        self.wm.window.make_current()
         self.wm.draw()
 
     def get_events(self):
+        # self.wm.window.make_current()
+        pyglfw.poll_events()
         return self.wm.get_events()
 
     def set_window_name(self, name):
         self.wm.set_window_name(name)
 
     def set_window_mode(self, size, options):
+        self.wm.window.make_current()
         return self.wm.set_window_mode(size, options)
+
+    @staticmethod
+    def fig2img(fig):
+        canvas = FigureCanvas(fig)
+        canvas.draw()
+        canvas_size = canvas.get_width_height()
+        plot_data = np.fromstring(canvas.tostring_argb(), dtype='uint8').reshape((canvas_size[0], canvas_size[1], 4))
+        plot_data[:, :, [0, 3]] = plot_data[:, :, [3, 0]]  # Convert to RGBA
+        plot_image = Image.frombytes(mode="RGBA", data=plot_data, size=canvas_size).transpose(
+            method=Image.FLIP_TOP_BOTTOM)
+        return plot_image
 
     @staticmethod
     def compute_ortho_matrix(left, right, bottom, top, near, far):
@@ -807,8 +887,12 @@ class CScene(object):
             self.nodes.append(n)
             if n.parent is None:
                 CNode.set_parent(node=n, parent=self.root)
+            if n.children is not None:
+                for c in n.children:
+                    self.insert_graph([c])
 
     def clear(self, r=0.0, g=0.2, b=0.2, a=1.0):
+        self.wm.window.make_current()
         self.ctx.clear(r, g, b, a)
 
     def delete_graph(self, n):
@@ -836,11 +920,13 @@ class CScene(object):
                 del self.nodes[i]
                 break
 
-    def draw(self, camera=None):
+    def draw(self, camera=None, use_ortho=False):
+        self.wm.window.make_current()
+
         if camera is None:
             camera = self.camera
-
         self.ctx.viewport = (0, 0, camera.width, camera.height)
+
         proj_matrix = self.compute_projection_matrix(camera.fx, camera.fy, camera.cx, camera.cy,
                                                      self.near, self.far, camera.s)
 
@@ -849,20 +935,28 @@ class CScene(object):
                                                self.near, self.far)
 
         self.perspective = np.matmul(ndc_matrix, proj_matrix)
+        if use_ortho:
+            ortho = np.eye(4)
+            ortho[0, 0] = (0.001 * camera.height) / camera.r
+            ortho[1, 1] = (0.001 * camera.width) / camera.r
+            ortho[2, 2] = - 2 / (self.far - self.near)
+            ortho[0, 3] = 0
+            ortho[1, 3] = 0
+            ortho[2, 3] = 0 #- (self.far + self.near) / (self.far - self.near)
+            self.root.draw(ortho, camera.camera_matrix, np.eye(4), self.render_mode)
+        else:
+            self.root.draw(self.perspective, camera.camera_matrix, np.eye(4), self.render_mode)
 
-        self.ctx.enable(mgl.BLEND)
-        self.ctx.blend_func = (mgl.SRC_ALPHA, mgl.ONE_MINUS_SRC_ALPHA)
-        self.ctx.enable(mgl.DEPTH_TEST)
-        self.root.draw(self.perspective, camera.camera_matrix, np.eye(4), self.render_mode)
         self.ctx.finish()
 
-    def set_font(self, font_path=None, font_size=64, font_color=(255,255,255,255), background_color=(0,0,0,0)):
+    def set_font(self, font_path=None, font_size=64, font_color=(255, 255, 255, 255), background_color=(0, 0, 0, 0)):
+        self.wm.window.make_current()
         if font_path is None:
             font_path = str(Path(__file__).resolve().parent) + "/../fonts/FiraCode-Medium.ttf"
         self.font = ImageFont.truetype(font_path, font_size)
         self.font_texture_map, self.font_texture_uv = self.make_font_texture(self.font, font_color, background_color)
         self.char_width, self.line_height = self.font.getsize("A")
-        self.text_display = CImage(self.ctx)
+        self.text_display = CImage(self)
         self.text_display.set_texture(self.font_texture_map.transpose(Image.FLIP_TOP_BOTTOM))
 
     @staticmethod
@@ -895,8 +989,9 @@ class CScene(object):
 
         return teximg, uv_coords
 
-    # TODO: Enable camera facing text rendering
     def draw_text(self, text, pos, scale=1):
+        self.wm.window.make_current()
+
         # Get text height and width and transofrm them to NDC
         char_width = self.char_width / self.width
         line_height = self.line_height / self.height
@@ -930,10 +1025,12 @@ class CScene(object):
         self.text_display.draw(None)
 
     def draw_line(self, a, b, color, thickness, write_on_depth_buffer=True):
+        self.wm.window.make_current()
+
         if not write_on_depth_buffer:
             self.ctx.disable(mgl.DEPTH_TEST)
 
-        line = CPointCloud(self.ctx)
+        line = CPointCloud(self)
         line.set_data(np.concatenate((a, color, b, color)))
         line.size = thickness
         line.draw_mode = mgl.LINE_STRIP
@@ -944,6 +1041,8 @@ class CScene(object):
             self.ctx.enable(mgl.DEPTH_TEST)
 
     def get_depth_image(self):
+        self.wm.window.make_current()
+
         zFar = self.far
         zNear = self.near
 
@@ -965,9 +1064,11 @@ class CScene(object):
             return np.zeros((self.width, self.height))
 
     def get_render_image(self):
+        self.wm.window.make_current()
+
         try:
             img_buffer = np.frombuffer(
-                self.fbo.read(viewport=self.ctx.viewport, components=4, dtype='f1', attachment=0),
+                self.fbo.read(viewport=self.ctx.viewport, components=4, dtype='f1', attachment=1),
                 dtype=np.dtype('uint8')).reshape(self.width, self.height, 4)
 
             return img_buffer
@@ -978,6 +1079,8 @@ class CScene(object):
 
     # TODO: The change of buffers does not seem to work properly and the
     def get_semantic_image(self):
+        self.wm.window.make_current()
+
         print("pyViewer warning!!. get_semantic_image(self) just returns a render of the geometry objects")
 
         visibility = [False] * len(self.nodes)
@@ -1014,6 +1117,8 @@ class CScene(object):
         return np.copy(img_buffer)
 
     def process_event(self, event):
+        self.wm.window.make_current()
+
         self.camera.process_event(event)
 
         # Cursor repositioning
@@ -1092,70 +1197,11 @@ class CNode(object):
         return res
 
 
-class CPointCloud(object):
-    def __init__(self, ctx, vshader=None, fshader=None):
-        self.ctx = ctx
-        self.data = []
-        self.vbo = None
-        self.vao = None
-        if vshader is not None:
-            self.vertex_shader = open(vshader).read()
-        else:
-            self.vertex_shader = point_cloud_vertex_shader
-        if fshader is not None:
-            self.fragment_shader = open(fshader).read()
-        else:
-            self.fragment_shader = point_cloud_fragment_shader
-        self.prog = self.ctx.program(vertex_shader=self.vertex_shader, fragment_shader=self.fragment_shader)
-        self.draw_mode = mgl.POINTS
-        self.size = 1
-
-    def update_shader(self):
-        if self.vao is not None:
-            self.vao.release()
-            self.vao = None
-        self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
-
-    def set_data(self, data):
-        if self.vbo is not None:
-            self.vbo.release()
-            self.vbo = None
-        if self.vao is not None:
-            self.vao.release()
-            self.vao = None
-        self.data = data
-        if data is not None:
-            self.vbo = self.ctx.buffer(data)
-            self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
-
-    def draw(self, mvp, mode=mgl.POINTS, id=0):
-        self.prog['Mvp'].value = tuple(np.array(mvp, np.float32).reshape(-1, order='F'))
-        if self.draw_mode is not None:
-            mode = self.draw_mode
-        self.ctx.point_size = self.size
-        self.ctx.line_width = self.size
-        if self.vao is not None:
-            self.vao.render(mode)
-        else:
-            print("Error. CPointCloud. Trying to display a None VertexArrayObject.")
-
-    def __del__(self):
-        if self.data is not None:
-            self.data = None
-        if self.vbo is not None:
-            self.vbo.release()
-            self.vbo = None
-        if self.vao is not None:
-            self.vao.release()
-            self.vao = None
-        if self.prog is not None:
-            self.prog.release()
-            self.prog = None
-
-
 class CGeometry(object):
-    def __init__(self, ctx, vshader=None, fshader=None):
-        self.ctx = ctx
+    def __init__(self, scene, vshader=None, fshader=None):
+        self.scene = scene
+        self.scene.make_current()
+        self.ctx = scene.ctx
         self.data = []
         self.vbo = None
         self.vao = None
@@ -1171,15 +1217,38 @@ class CGeometry(object):
         self.prog = self.ctx.program(vertex_shader=self.vertex_shader, fragment_shader=self.fragment_shader)
         self.draw_mode = None
         self.texture = self.ctx.texture(size=(16, 16), components=4, data=np.zeros((16,16,4), dtype=np.uint8).tobytes())
+        self.is_transparent = False
+        self.draw_always = False
 
-    def set_texture(self, path):
-        texture_image = Image.open(path).transpose(Image.FLIP_TOP_BOTTOM).convert('RGBA')
-        texture_image_data = texture_image.tobytes()
+    def set_texture(self, image, build_mipmaps=True):
+        self.scene.make_current()
+        if isinstance(image, PIL.Image.Image):
+            texture_image = image.convert('RGBA')
+            texture_image_data = texture_image.tobytes()
+
+        elif isinstance(image, str):
+            texture_image = Image.open(image).transpose(Image.FLIP_TOP_BOTTOM).convert('RGBA')
+            texture_image_data = texture_image.tobytes()
+
+        elif isinstance(image, np.ndarray):
+            texture_image = PIL.Image.fromarray(image).transpose(Image.FLIP_TOP_BOTTOM).convert('RGBA')
+            texture_image_data = texture_image.tobytes()
+        else:
+            raise Exception("Unable to interpret texture type. Required a PIL.Image or a path to an image. Got " + str(type(image)))
+
+        if self.texture is not None:
+            self.texture.release()
+            self.texture = None
+
         self.texture = self.ctx.texture(size=texture_image.size, components=4, data=texture_image_data)
-        self.texture.build_mipmaps()
-        self.texture.filter = (mgl.LINEAR_MIPMAP_LINEAR, mgl.LINEAR)
+        if build_mipmaps:
+            self.texture.build_mipmaps()
+            self.texture.filter = (mgl.LINEAR_MIPMAP_LINEAR, mgl.LINEAR)
+        else:
+            self.texture.filter = (mgl.LINEAR, mgl.LINEAR)
 
     def update_shader(self):
+        self.scene.make_current()
         if self.vao is not None:
             self.vao.release()
             self.vao = None
@@ -1189,6 +1258,11 @@ class CGeometry(object):
             self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 3f 3f 4f', 'in_vert', 'in_norm', 'in_text', 'in_color')])
 
     def set_data(self, data, indices=None):
+        self.scene.make_current()
+        if data is None or len(data) == 0:
+            print("Warning :: " + str(__class__) + ". Setting empty data.")
+            return
+
         self.data = data
         if self.vbo is not None:
             self.vbo.release()
@@ -1207,6 +1281,10 @@ class CGeometry(object):
             self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 3f 3f 4f', 'in_vert', 'in_norm', 'in_text', 'in_color')])
 
     def draw(self, mvp, mode=mgl.TRIANGLE_STRIP, id=0):
+        self.scene.make_current()
+        if self.data is None or len(self.data) == 0:
+            return
+
         # TODO: Extract lights outside
         if 'Light' in self.prog:
             self.prog['Light'].value = (1.0, 1.0, 3.0)
@@ -1228,9 +1306,21 @@ class CGeometry(object):
 
         if self.draw_mode is not None:
             mode = self.draw_mode
-        self.vao.render(mode)
+
+        if self.draw_always:
+            self.ctx.disable(mgl.DEPTH_TEST)
+        else:
+            self.ctx.enable(mgl.DEPTH_TEST)
+        if self.is_transparent:
+            self.ctx.enable(mgl.BLEND)
+            self.ctx.blend_func = (mgl.SRC_ALPHA, mgl.ONE_MINUS_SRC_ALPHA)
+            self.vao.render(mode)
+        else:
+            self.ctx.disable(mgl.BLEND)
+            self.vao.render(mode)
 
     def __del__(self):
+        self.scene.make_current()
         del self.data
         if self.vbo is not None:
             self.vbo.release()
@@ -1247,23 +1337,172 @@ class CGeometry(object):
         #     self.prog = None
 
 
-class CImage(CGeometry):
-    def __init__(self, ctx):
-        self.ctx = ctx
+class CPointCloud(object):
+    def __init__(self, scene, vshader=None, fshader=None):
+        self.scene = scene
+        self.scene.make_current()
+        self.ctx = scene.ctx
         self.data = []
         self.vbo = None
         self.vao = None
-        self.ibo = None
+        if vshader is not None:
+            self.vertex_shader = open(vshader).read()
+        else:
+            self.vertex_shader = point_cloud_vertex_shader
+        if fshader is not None:
+            self.fragment_shader = open(fshader).read()
+        else:
+            self.fragment_shader = point_cloud_fragment_shader
+        self.prog = self.ctx.program(vertex_shader=self.vertex_shader, fragment_shader=self.fragment_shader)
+        self.draw_mode = mgl.POINTS
+        self.size = 1
+
+    def update_shader(self):
+        self.scene.make_current()
+        if self.vao is not None:
+            self.vao.release()
+            self.vao = None
+        self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
+
+    def set_data(self, data):
+        self.scene.make_current()
+        if data is None or len(data) == 0:
+            print("Warning :: " + str(__class__) + ". Setting empty data.")
+            return
+
+        if self.vbo is not None:
+            self.vbo.release()
+            self.vbo = None
+        if self.vao is not None:
+            self.vao.release()
+            self.vao = None
+        self.data = data
+        if data is not None:
+            self.vbo = self.ctx.buffer(data)
+            self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
+
+    def draw(self, mvp, mode=mgl.POINTS, id=0):
+        self.scene.make_current()
+        if self.data is None or len(self.data) == 0:
+            return
+
+        self.ctx.disable(mgl.BLEND)
+        self.ctx.enable(mgl.DEPTH_TEST)
+
+        self.prog['Mvp'].value = tuple(np.array(mvp, np.float32).reshape(-1, order='F'))
+        if self.draw_mode is not None:
+            mode = self.draw_mode
+        self.ctx.point_size = self.size
+        self.ctx.line_width = self.size
+        self.vao.render(mode)
+
+    def __del__(self):
+        if self.data is not None:
+            self.data = None
+        if self.vbo is not None:
+            self.vbo.release()
+            self.vbo = None
+        if self.vao is not None:
+            self.vao.release()
+            self.vao = None
+        if self.prog is not None:
+            self.prog.release()
+            self.prog = None
+
+
+class CFloatingText(CGeometry):
+    def __init__(self, scene, text="text", position=(0, 0, 0), height=0.1):
+        super().__init__(scene)
+        self.font = None
+        self.font_texture_map = None
+        self.font_texture_uv = None
+        self.char_width = None
+        self.line_height = None
+        self.draw_mode = mgl.TRIANGLES
+        self.position = position
+        self.text = text
+        self.height = height
+        self.aspect_ratio = 1
+        self.width = self.aspect_ratio * self.height
+        self.set_font()
+        self.camera_facing = False
+        self.is_transparent = True
+
+    def set_font(self, font_path=None, font_size=64, font_color=(255, 255, 255, 255), background_color=(0, 0, 0, 0)):
+        self.scene.make_current()
+        if font_path is None:
+            font_path = str(Path(__file__).resolve().parent) + "/../fonts/FiraCode-Medium.ttf"
+        self.font = ImageFont.truetype(font_path, font_size)
+        self.font_texture_map, self.font_texture_uv = CScene.make_font_texture(self.font, font_color, background_color)
+        self.char_width, self.line_height = self.font.getsize("A")
+        self.set_texture(self.font_texture_map.transpose(Image.FLIP_TOP_BOTTOM), build_mipmaps=False)
+        self.aspect_ratio = self.line_height / self.char_width
+        self.width = self.height / self.aspect_ratio
+        self.update_vertices()
+        # self.font_texture_map.show()
+
+    def set_text(self, text):
+        self.text = text
+        self.update_vertices()
+
+    def set_position(self, pos):
+        self.position = pos
+        self.update_vertices()
+
+    def set_height(self, height):
+        self.height = height
+        self.width = self.height / self.aspect_ratio
+        self.update_vertices()
+
+    def update_vertices(self):
+        verts = np.array([]).astype(np.float32)
+        line_num = 0
+        ch_pos = 0
+        for ch in self.text:
+            if ch == "\n":
+                line_num += 1
+                ch_pos = 0
+                continue
+
+            y0 = line_num * self.height
+            y1 = y0 + self.height
+            x0 = ch_pos * self.width
+            x1 = x0 + self.width
+            (u0, v0, u1, v1) = self.font_texture_uv[ch]
+            # (u0, v0, u1, v1) = (0, 0, 1, 1)
+            # Vertex format is 3f (pos) 3f (normal) 3f (texture) 4f (color)
+            p0 = np.array([x0, y0, 0, 0, 0, 1, u0, v0, 0, 0, 0, 0, 0]).astype(np.float32)
+            p1 = np.array([x1, y0, 0, 0, 0, 1, u1, v0, 0, 0, 0, 0, 0]).astype(np.float32)
+            p2 = np.array([x1, y1, 0, 0, 0, 1, u1, v1, 0, 0, 0, 0, 0]).astype(np.float32)
+            p3 = np.array([x0, y1, 0, 0, 0, 1, u0, v1, 0, 0, 0, 0, 0]).astype(np.float32)
+            verts = np.concatenate((verts, p0, p1, p2, p2, p3, p0))
+            ch_pos += 1
+        self.set_data(verts)
+
+    def draw(self, mvp, mode=mgl.TRIANGLES, id=0):
+        if self.camera_facing:
+            # Compute camera facing rotation matrix
+            pass
+
+        super().draw(mvp, mode, id)
+
+
+class CImage(CGeometry):
+    def __init__(self, ctx):
+        super().__init__(ctx)
         self.vertex_shader = image_vertex_shader
         self.fragment_shader = image_fragment_shader
         self.prog = self.ctx.program(vertex_shader=self.vertex_shader, fragment_shader=self.fragment_shader)
-        self.draw_mode = None
+        self.draw_mode = mgl.TRIANGLES
         self.texture = None
         self.offset = (0.0, 0.0)
         self.size = (1.0, 1.0)
         self.color = np.array((0, 0, 0, 0), np.float32)
+        self.is_transparent = True
+        self.draw_always = True
 
     def set_position(self, offset, size):
+        self.scene.make_current()
         if self.vbo is not None:
             self.vbo.release()
             self.vbo = None
@@ -1286,45 +1525,14 @@ class CImage(CGeometry):
         self.size = size
         self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '2f 2f 4f', 'in_vert', 'in_text', 'in_color')])
 
-    def set_texture(self, image):
-        if isinstance(image, PIL.Image.Image):
-            texture_image = image.convert('RGBA')
-            texture_image_data = texture_image.tobytes()
-
-        elif isinstance(image, str):
-            texture_image = Image.open(image).transpose(Image.FLIP_TOP_BOTTOM).convert('RGBA')
-            texture_image_data = texture_image.tobytes()
-
-        elif isinstance(image, np.ndarray):
-            texture_image = PIL.Image.fromarray(image).transpose(Image.FLIP_TOP_BOTTOM).convert('RGBA')
-            texture_image_data = texture_image.tobytes()
-        else:
-            raise Exception("Unable to interpret texture type. Required a PIL.Image or a path to an image. Got " + str(type(image)))
-
-        if self.texture is not None:
-            self.texture.release()
-            self.texture = None
-
-        self.texture = self.ctx.texture(size=texture_image.size, components=4, data=texture_image_data)
-        # self.texture.build_mipmaps()
-        self.texture.filter = (mgl.LINEAR, mgl.LINEAR)
-        # self.texture.anisotropy = 64.0
+    def set_texture(self, image, build_mipmaps=False):
+        super().set_texture(image, build_mipmaps)
 
     def draw(self, mvp, mode=mgl.TRIANGLES, id=0):
-        self.ctx.disable(mgl.DEPTH_TEST)
-        tex_id = np.array(0, np.uint16)
-        if 'Texture' in self.prog:
-            self.prog['Texture'].value = tex_id
-
-        if self.texture is not None:
-            self.texture.use(tex_id)
-
-        if self.draw_mode is not None:
-            mode = self.draw_mode
-        self.vao.render(mode)
-        self.ctx.enable(mgl.DEPTH_TEST)
+        super().draw(mvp, mode, id)
 
     def set_vertices(self, vertex_data):
+        self.scene.make_current()
         if self.vbo is not None:
             self.vbo.release()
             self.vbo = None
@@ -1334,3 +1542,478 @@ class CImage(CGeometry):
 
         self.vbo = self.ctx.buffer(vertex_data)
         self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '2f 2f 4f', 'in_vert', 'in_text', 'in_color')])
+
+
+class CLines(CGeometry):
+    def __init__(self, ctx):
+        super().__init__(ctx)
+        self.draw_mode = mgl.LINES
+        self.vertex_shader = plot_vertex_shader
+        self.fragment_shader = plot_fragment_shader
+        self.prog = self.ctx.program(vertex_shader=self.vertex_shader, fragment_shader=self.fragment_shader)
+        self.line_color = np.array([0,0,0,1])
+        self.line_width = 1
+        self.data = np.array([], dtype=np.float32)
+
+    def set_data(self, data, indices=None):
+        self.scene.make_current()
+        if data is None or len(data) == 0:
+            print("Warning :: " + str(__class__) + ". Setting empty data.")
+            return
+
+        self.data = data
+        self.vbo = self.ctx.buffer(self.data)
+        self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
+
+    def draw(self, mvp, mode=mgl.LINES, id=0):
+        self.scene.make_current()
+        self.ctx.line_width = self.line_width
+        super().draw(mvp, mode, id)
+
+
+class CPlot(CGeometry):
+    def __init__(self, ctx):
+        super().__init__(ctx)
+        self.draw_mode = mgl.LINES
+        self.vertex_shader = plot_vertex_shader
+        self.fragment_shader = plot_fragment_shader
+        self.prog = self.ctx.program(vertex_shader=self.vertex_shader, fragment_shader=self.fragment_shader)
+        self.line_color = np.array([0,0,0,1])
+        self.xlim = [None, None]
+        self.ylim = [None, None]
+        self.xticks = 10
+        self.yticks = 10
+        self.xlines = 0
+        self.ylines = 0
+        self.verts_frame = np.array([], dtype=np.float32)
+        self.verts_ticks = np.array([], dtype=np.float32)
+        self.verts_label = np.array([], dtype=np.float32)
+        self.verts_data  = np.array([], dtype=np.float32)
+        self.verts_tick_lines = np.array([], dtype=np.float32)
+        self.verts_markers = np.array([], dtype=np.float32)
+        self.verts_labels = np.array([], dtype=np.float32)
+        self.is_transparent = True
+        self.data = np.array([], dtype=np.float32)
+        self.data_x = np.array([], dtype=np.float32)
+        self.data_y = np.array([], dtype=np.float32)
+        self.xlabel = ""
+        self.ylabel = ""
+        self.title = ""
+        self.markers = ""
+        self.line_width = 1
+        self.blend_factor = 1.5
+        self.make_frame()
+        self.make_ticks()
+        self.make_tick_lines()
+
+    def set_x_label(self, label, c=(0, 0, 0, 1)):
+        self.xlabel = label
+        self.make_labels(c=c)
+
+    def set_y_label(self, label, c=(0, 0, 0, 1)):
+        self.xlabel = label
+        self.make_labels(c=c)
+
+    def set_title(self, label, c=(0, 0, 0, 1)):
+        self.xlabel = label
+        self.make_labels(c=c)
+
+    def set_x_ticks(self, num, c=(0, 0, 0, 0.2)):
+        self.xticks = num
+        self.make_ticks(c=c)
+
+    def set_y_ticks(self, num, c=(0, 0, 0, 0.2)):
+        self.yticks = num
+        self.make_ticks(c=c)
+
+    def set_x_lines(self, num, c=(0, 0, 0, 0.2)):
+        self.xlines = num
+        self.make_tick_lines(c=c)
+
+    def set_y_lines(self, num, c=(0, 0, 0, 0.2)):
+        self.ylines = num
+        self.make_tick_lines(c=c)
+
+    def set_x_lim(self, min, max):
+        self.xlim = (min, max)
+        if len(self.data_x) > 0:
+            self.make_data()
+
+    def set_y_lim(self, min, max):
+        self.ylim = (min, max)
+        if len(self.data_x) > 0:
+            self.make_data()
+
+    def set_markers(self, markers="", c=(0, 0, 0, 0.2)):
+        self.markers = markers
+        self.make_markers(c=c)
+
+    def make_labels(self, c):
+        self.xlabel
+        self.ylabel
+        self.title
+
+    # TODO: Integrate this when the axis rescale and in the initialization of the plot
+    def make_tick_labels(self, c=(0, 0, 0, 1), format="%5.3f"):
+        # Get plotted data limits
+        min_x = self.xlim[0] if self.xlim[0] is not None else np.min(self.data_x)
+        max_x = self.xlim[1] if self.xlim[1] is not None else np.max(self.data_x)
+        min_y = self.ylim[0] if self.ylim[0] is not None else np.min(self.data_y)
+        max_y = self.ylim[1] if self.ylim[1] is not None else np.max(self.data_y)
+
+        # Compute the normalized positions for each label
+        x_tick_pos = [(max_x-min_x)/i + min_x for i in range(self.xticks)]
+        y_tick_pos = [(max_y-min_y)/i + min_y for i in range(self.yticks)]
+
+        x_tick_normpos = [(tick-min_x)/(max_x-min_x) for tick in x_tick_pos]
+        y_tick_normpos = [(tick-min_y)/(max_y-min_y) for tick in y_tick_pos]
+
+        # Generate strings for each label and their positions
+        x_tick_labels = [format % tick for tick in x_tick_pos]
+        y_tick_labels = [format % tick for tick in y_tick_pos]
+
+        # Generate labels at the desired location
+        x_text_labels = [self.generate_label(label, [pos, 0], c) for label, pos in zip(x_tick_labels, x_tick_normpos)]
+        y_text_labels = [self.generate_label(label, [0, pos], c) for label, pos in zip(y_tick_labels, y_tick_normpos)]
+
+        self.verts_labels = np.concatenate(x_text_labels, y_text_labels)
+
+    # TODO: Implement label generation in normalized coordinates
+    # TODO: Implement line breaks
+    @staticmethod
+    def generate_label(label, size, color):
+        vertices = np.array([], dtype=np.float32)
+        c_pos = 0.0
+        for char in label:
+            c_points = CPlot.get_traced_char(char) * size   # Get a charcter in normalized coordinates and scale it
+            c_points[:, 0] += c_pos                         # Advance the character in the X direction to the current position
+            c_pos = np.max(c_points[:, 0])                  # Increase the current cursor position
+
+            # Add color data to each vertex of the current char being added
+            for i in range(0, len(c_points), 3):
+                vertices = np.concatenate((vertices, c_points[i:i+3], color))
+
+        return vertices
+
+    # TODO: Implement traced characters lookup table. This must returns 3D vertices of the desired char
+    @staticmethod
+    def get_traced_char(char):
+        vertices = np.array([], dtype=np.float32)
+        return vertices
+
+    def make_tick_lines(self, c=None):
+        if c is None:
+            c = self.line_color
+
+        self.verts_tick_lines = np.array([], dtype=np.float32)
+
+        # X lines
+        if self.xlines > 0:
+            tick_inc = 1.0 / self.xlines
+            for i in range(self.xlines):
+                p0 = np.array([tick_inc * i + tick_inc * 0.5, 0], dtype=np.float32)
+                p1 = np.array([tick_inc * i + tick_inc * 0.5, 1], dtype=np.float32)
+                line = self.make_line(p0, p1, np.array([0, c[0], c[1], c[2], c[3]], dtype=np.float32))
+                self.verts_ticks = np.concatenate((self.verts_ticks, line))
+
+        # Y lines
+        if self.ylines > 0:
+            tick_inc = 1.0 / self.ylines
+            for i in range(self.ylines):
+                p0 = np.array([0, tick_inc * i + tick_inc*0.5], dtype=np.float32)
+                p1 = np.array([1, tick_inc * i + tick_inc*0.5], dtype=np.float32)
+                line = self.make_line(p0, p1, np.array([0, c[0], c[1], c[2], c[3]], dtype=np.float32))
+                self.verts_ticks = np.concatenate((self.verts_ticks, line))
+
+    def make_ticks(self, c=None, tick_len=0.05, symmetric=False):
+        if c is None:
+            c = self.line_color
+
+        self.verts_ticks = np.array([], dtype=np.float32)
+        # X ticks
+        if self.xticks > 0:
+            tick_inc = 1.0 / self.xticks
+            for i in range(self.xticks):
+                p0 = np.array([tick_inc * i + tick_inc * 0.5, -tick_len / 2 * int(symmetric)], dtype=np.float32)
+                p1 = np.array([tick_inc * i + tick_inc * 0.5,  tick_len / 2], dtype=np.float32)
+                line = self.make_line(p0, p1, np.array([0, c[0], c[1], c[2], c[3]], dtype=np.float32))
+                self.verts_ticks = np.concatenate((self.verts_ticks, line))
+
+        # Y ticks
+        if self.yticks > 0:
+            tick_inc = 1.0 / self.yticks
+            for i in range(self.yticks):
+                p0 = np.array([-tick_len / 2 * int(symmetric), tick_inc * i + tick_inc * 0.5], dtype=np.float32)
+                p1 = np.array([tick_len / 2, tick_inc * i + tick_inc * 0.5], dtype=np.float32)
+                line = self.make_line(p0, p1, np.array([0, c[0], c[1], c[2], c[3]], dtype=np.float32))
+                self.verts_ticks = np.concatenate((self.verts_ticks, line))
+
+    def make_frame(self, c=None):
+        if c is None:
+            c = self.line_color
+
+        # Vertex format is 3f (pos) 4f (color)
+        color_data = np.array([0, c[0], c[1], c[2], c[3]], dtype=np.float32)
+        l1 = self.make_line(np.array([0, 0], dtype=np.float32), np.array([0, 1], dtype=np.float32), color_data)
+        l2 = self.make_line(np.array([0, 1], dtype=np.float32), np.array([1, 1], dtype=np.float32), color_data)
+        l3 = self.make_line(np.array([1, 1], dtype=np.float32), np.array([1, 0], dtype=np.float32), color_data)
+        l4 = self.make_line(np.array([1, 0], dtype=np.float32), np.array([0, 0], dtype=np.float32), color_data)
+        self.verts_frame = np.concatenate((l1, l2, l3, l4))
+
+    def make_data(self, c=(0, 0, 0, 1)):
+        raise NotImplementedError
+
+    def set_vline(self, x, c=(1, 0, 0, 1)):
+        min_x = self.xlim[0] if self.xlim[0] is not None else np.min(self.data_x)
+        max_x = self.xlim[1] if self.xlim[1] is not None else np.max(self.data_x)
+        x_norm = (x-min_x) / (max_x-min_x)
+        color_data = np.array([0, c[0], c[1], c[2], c[3]], dtype=np.float32)
+        l1 = self.make_line(np.array([x_norm, 0], dtype=np.float32), np.array([x_norm, 1], dtype=np.float32), color_data)
+        self.verts_markers = l1
+
+    def draw(self, mvp, mode=mgl.LINES, id=0):
+        self.scene.make_current()
+        self.ctx.line_width = self.line_width
+
+        self.data = np.concatenate((self.verts_markers, self.verts_data, self.verts_frame, self.verts_ticks, self.verts_tick_lines, self.verts_label))
+        if len(self.data) > 0:
+            self.vbo = self.ctx.buffer(self.data)
+            self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
+            super().draw(mvp, mode, id)
+
+    # This version is just with points (for GL_LINES)
+    @staticmethod
+    def make_line(p1, p2, vert_attr=np.array([], dtype=np.float32)):
+        return np.concatenate((p1, vert_attr, p2, vert_attr))
+
+    # # This version is with triangles (for GL_TRIANGLES)
+    # @staticmethod
+    # def triangulate_line(p1, p2, thickness=0.01, vert_attr=np.array([], dtype=np.float32)):
+    #     ndir = (p1 - p2) / np.linalg.norm(p1 - p2)
+    #     ndir = np.array([-ndir[1], ndir[0]], dtype=np.float32)
+    #     seg_p1 = p1 + ndir * thickness
+    #     seg_p2 = p1 - ndir * thickness
+    #     seg_p3 = p2 + ndir * thickness
+    #     seg_p4 = p2 - ndir * thickness
+    #     return np.concatenate((seg_p1, vert_attr, seg_p2, vert_attr, seg_p3, vert_attr, seg_p2, vert_attr, seg_p3, vert_attr, seg_p4, vert_attr))
+
+
+class CLinePlot(CPlot):
+    def __init__(self, ctx):
+        super().__init__(ctx)
+
+    def plot(self, x, y, c=(0, 0, 0, 1)):
+        if len(x) <= 1:
+            print("ERROR: CLinePlot plot needs more than 1 element.")
+            return
+
+        self.data_x = np.array(x)
+        self.data_y = np.array(y)
+
+        min_x = self.xlim[0] if self.xlim[0] is not None else np.min(self.data_x)
+        max_x = self.xlim[1] if self.xlim[1] is not None else np.max(self.data_x)
+        min_y = self.ylim[0] if self.ylim[0] is not None else np.min(self.data_y)
+        max_y = self.ylim[1] if self.ylim[1] is not None else np.max(self.data_y)
+
+        # Copy only data that is in range
+        filter_idx_x = np.logical_and(self.data_x > min_x, self.data_x < max_x)
+        filter_idx_y = np.logical_and(self.data_y > min_y, self.data_y < max_y)
+        filter = np.logical_and(filter_idx_x, filter_idx_y)
+
+        self.data_x = self.data_x[filter]
+        self.data_y = self.data_y[filter]
+        self.make_data(c=c)
+
+    def plot_append(self, x, y, c=(0, 0, 0, 1)):
+        data_x = np.array([x])
+        data_y = np.array([y])
+
+        # Filter the data point in the plot range
+        if len(self.data_x) > 0 and len(self.data_y) > 0:
+            min_x = self.xlim[0] if self.xlim[0] is not None else np.min(np.concatenate((self.data_x, data_x)))
+            max_x = self.xlim[1] if self.xlim[1] is not None else np.max(np.concatenate((self.data_x, data_x)))
+            min_y = self.ylim[0] if self.ylim[0] is not None else np.min(np.concatenate((self.data_y, data_y)))
+            max_y = self.ylim[1] if self.ylim[1] is not None else np.max(np.concatenate((self.data_y, data_y)))
+        else:
+            min_x = self.xlim[0] if self.xlim[0] is not None else np.min(data_x)
+            max_x = self.xlim[1] if self.xlim[1] is not None else np.max(data_x)
+            min_y = self.ylim[0] if self.ylim[0] is not None else np.min(data_y)
+            max_y = self.ylim[1] if self.ylim[1] is not None else np.max(data_y)
+
+        filter_idx_x = np.logical_and(data_x >= min_x, data_x <= max_x)
+        filter_idx_y = np.logical_and(data_y >= min_y, data_y <= max_y)
+        filter = np.logical_and(filter_idx_x, filter_idx_y)
+
+        data_x = data_x[filter]
+        data_y = data_y[filter]
+
+        # Add in range data points to the plot vertex data
+        if len(data_x) == 1:
+            point = np.array([(data_x[0]-min_x) / (max_x-min_x), (data_y[0]-min_y) / (max_y-min_y), 0.001, c[0], c[1], c[2], c[3]], dtype=np.float32)
+            if len(self.verts_data) > 0:
+                self.verts_data = self.add_point_to_line(self.verts_data, point)
+            else:
+                self.verts_data = np.concatenate((point, point))
+        elif len(data_x) > 1:
+            new_verts_data = self.make_vertex_data(data_x, data_y, c)
+            self.verts_data = self.join_lines(self.verts_data, new_verts_data)
+        else:
+            return
+
+        # Add in range data points to the plot data
+        self.data_x = np.concatenate((self.data_x, data_x))
+        self.data_y = np.concatenate((self.data_y, data_y))
+
+    @staticmethod
+    def join_lines(l1, l2):
+        return np.append((l1, l1[-7:], l2[0:8], l2))
+
+    @staticmethod
+    def add_point_to_line(line, point):
+        return np.concatenate((line, line[-7:], point))
+
+    def make_data(self, c=(0, 0, 0, 1)):
+        if len(self.data_x) > 1:
+            self.verts_data = self.make_vertex_data(self.data_x, self.data_y, c)
+
+    def make_vertex_data(self, x=np.array([], dtype=np.float32), y=np.array([], dtype=np.float32), c=(0, 0, 0, 1)):
+        data = np.array([], np.float32)
+
+        if len(x) <= 0 and len(y) <= 0:
+            return data
+
+        if len(self.data_x) > 0 and len(self.data_y) > 0:
+            min_x = self.xlim[0] if self.xlim[0] is not None else np.min(self.data_x)
+            max_x = self.xlim[1] if self.xlim[1] is not None else np.max(self.data_x)
+            min_y = self.ylim[0] if self.ylim[0] is not None else np.min(self.data_y)
+            max_y = self.ylim[1] if self.ylim[1] is not None else np.max(self.data_y)
+        else:
+            min_x = self.xlim[0] if self.xlim[0] is not None else np.min(x)
+            max_x = self.xlim[1] if self.xlim[1] is not None else np.max(x)
+            min_y = self.ylim[0] if self.ylim[0] is not None else np.min(y)
+            max_y = self.ylim[1] if self.ylim[1] is not None else np.max(y)
+
+        range_x = (max_x - min_x)
+        range_y = (max_y - min_y)
+
+        if range_x > 0 and range_y > 0:
+            # data = np.array([], dtype=np.float32)
+            # for i in range(len(x)-1):
+            #     # Get the segment coordinates
+            #     p1 = np.array([(x[i] - min_x) / (max_x - min_x), (y[i] - min_y) / (max_y - min_y)], dtype=np.float32)
+            #     p2 = np.array([(x[i+1] - min_x) / (max_x - min_x), (y[i+1] - min_y) / (max_y - min_y)], dtype=np.float32)
+            #
+            #     # Get the segment normal and create the 4 line vertices
+            #     triangles = self.triangulate_line(p1, p2, self.line_width, color_data)
+            #
+            #     # Add segment triangles
+            #     data = np.concatenate((data, triangles))
+
+            if len(x) == 1 and len(self.data_x) > 0 and len(self.data_y) > 0:
+                prev_point = np.array([(self.data_x[-1] - min_x) / (max_x - min_x), (self.data_y[-1] - min_y) / (max_y - min_y), 0.001,c[0], c[1], c[2]], dtype=np.float32)
+                data = np.array([(self.data_x[-1]-min_x) / (max_x-min_x), (self.data_y[-1]-min_y) / (max_y-min_y), 0.001, c[0], c[1], c[2], c[3], (x[0]-min_x) / (max_x-min_x), (y[0]-min_y) / (max_y-min_y), 0.001, c[0], c[1], c[2], c[3]], dtype=np.float32)
+                data = np.concatenate((prev_point, data[0], data)).flatten()
+            else:
+                data = np.array([[(x[i]-min_x) / (max_x-min_x), (y[i]-min_y) / (max_y-min_y), 0.001, c[0], c[1], c[2], c[3], (x[i+1]-min_x) / (max_x-min_x), (y[i+1]-min_y) / (max_y-min_y), 0.001, c[0], c[1], c[2], c[3]] for i in range(len(x)-1)], dtype=np.float32)
+            return data.flatten()
+        else:
+            print("ERROR: CLinePlot range of values is 0 for X or Y axis.")
+            return data
+
+
+class CBarPlot(CPlot):
+    def __init__(self, ctx):
+        super().__init__(ctx)
+        self.draw_mode = mgl.TRIANGLES
+        self.data_std = np.array([], dtype=np.float32)
+
+    # This version is with triangles (for GL_TRIANGLES)
+    @staticmethod
+    def triangulate_line(p1, p2, thickness=0.01, vert_attr=np.array([], dtype=np.float32)):
+        ndir = (p1 - p2) / np.linalg.norm(p1 - p2)
+        ndir = np.array([-ndir[1], ndir[0]], dtype=np.float32)
+        seg_p1 = p1 + ndir * thickness * 0.5
+        seg_p2 = p1 - ndir * thickness * 0.5
+        seg_p3 = p2 + ndir * thickness * 0.5
+        seg_p4 = p2 - ndir * thickness * 0.5
+        return np.concatenate((seg_p1, vert_attr, seg_p2, vert_attr, seg_p3, vert_attr, seg_p2, vert_attr, seg_p3, vert_attr, seg_p4, vert_attr))
+
+    def plot(self, y, stdev, c=(0, 0, 0, 1)):
+        if len(y) <= 0 or len(stdev) <= 0:
+            print("ERROR: CLinePlot plot needs more than 0 elements.")
+            return
+
+        self.data_y = np.array(y, dtype=np.float32)
+        self.data_std = np.array(stdev, dtype=np.float32)
+
+        min_y = self.ylim[0] if self.ylim[0] is not None else np.min(self.data_y - stdev)
+        max_y = self.ylim[1] if self.ylim[1] is not None else np.max(self.data_y + stdev)
+
+        # Copy only data that is in range
+        filter_idx_y = np.logical_and(self.data_y > min_y, self.data_y < max_y)
+
+        self.data_y = self.data_y[filter_idx_y]
+        self.data_std = self.data_std[filter_idx_y]
+
+        # One horizontal tick per bar
+        self.set_x_ticks(len(self.data_y))
+
+        self.make_data(c=c)
+
+    def make_data(self, c=(0, 0, 0, 1)):
+        if len(self.data_y) > 0:
+            self.verts_data = self.make_vertex_data(self.data_y, self.data_std, c)
+
+    def make_vertex_data(self, y, std, c=(0, 0, 0, 1)):
+        data = np.array([], np.float32)
+
+        if len(y) <= 0 or len(std) <= 0:
+            return data
+
+        self.data_y = y
+        self.data_std = std
+
+        min_y = self.ylim[0] if self.ylim[0] is not None else np.min(self.data_y - self.data_std)
+        max_y = self.ylim[1] if self.ylim[1] is not None else np.max(self.data_y + self.data_std)
+
+        range_y = (max_y - min_y)
+
+        color_data = np.array([0, c[0], c[1], c[2], c[3]], dtype=np.float32)
+
+        if range_y > 0:
+            data = np.array([], dtype=np.float32)
+            width = 1/len(self.data_y)
+            for i in range(len(self.data_y)):
+                # Get the segment coordinates
+                x = i / len(self.data_y)
+                p1 = np.array([x + width * 0.5, 0], dtype=np.float32)
+                p2 = np.array([x + width * 0.5, (y[i] - min_y) / (max_y - min_y)], dtype=np.float32)
+
+                # Get the segment normal and create the 4 line vertices
+                triangles = self.triangulate_line(p1, p2, width - 0.01, color_data)
+
+                # Add segment triangles
+                data = np.concatenate((data, triangles))
+            return data.flatten()
+        else:
+            print("ERROR: CLinePlot range of values is 0 for X or Y axis.")
+            return data
+
+    def draw(self, mvp, mode=mgl.LINES, id=0):
+        self.scene.make_current()
+        # Draw first lines
+        self.draw_mode = mgl.LINES
+        self.ctx.line_width = self.line_width
+        self.data = np.concatenate((self.verts_markers, self.verts_frame, self.verts_ticks, self.verts_tick_lines, self.verts_label))
+        if len(self.data) > 0:
+            self.vbo = self.ctx.buffer(self.data)
+            self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
+            CGeometry.draw(self, mvp, mode, id)
+
+        # Draw second triangles
+        self.draw_mode = mgl.TRIANGLES
+        if len(self.verts_data) > 0:
+            self.vbo = self.ctx.buffer(self.verts_data)
+            self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
+            CGeometry.draw(self, mvp, mode, id)
+

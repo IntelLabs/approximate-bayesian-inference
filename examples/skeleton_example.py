@@ -10,7 +10,7 @@ from pyViewer.models import REFERENCE_FRAME_MESH, FLOOR_MESH
 
 def make_skeleton(scene):
     # Skeleton definition
-    skeleton_node = CNode(geometry=CPointCloud(scene.ctx), transform=CTransform( tf.compose_matrix(translate=[0,1,0]) ))
+    skeleton_node = CNode(geometry=CPointCloud(scene), transform=CTransform( tf.compose_matrix(translate=[0,1,0]) ))
     skeleton_node.geom.draw_mode = mgl.LINES
     skeleton_joint_names = ["head", "neck", "l_shoulder", "r_shoulder", "l_elbow", "r_elbow", "l_wrist", "r_wrist",
                             "l_hip", "r_hip", "l_knee", "r_knee", "l_foot", "r_foot"]
@@ -67,11 +67,11 @@ def skeleton_example():
     scene.camera.update()
 
     # Example floor
-    floor_node = CNode(geometry=make_mesh(scene.ctx, FLOOR_MESH, scale=1.0), transform=CTransform( tf.compose_matrix(translate=[0,0,-0.02]) ) )
+    floor_node = CNode(geometry=make_mesh(scene, FLOOR_MESH, scale=1.0), transform=CTransform( tf.compose_matrix(translate=[0,0,-0.02]) ) )
     scene.insert_graph([floor_node])
 
     # Example reference frame size 1.0
-    nodes1 = CNode(geometry=make_mesh(scene.ctx, REFERENCE_FRAME_MESH, scale=1.0))
+    nodes1 = CNode(geometry=make_mesh(scene, REFERENCE_FRAME_MESH, scale=1.0))
     scene.insert_graph([nodes1])
 
     # Set initial joint positions for visualization. See details of the skeleton definition in make_skeleton()

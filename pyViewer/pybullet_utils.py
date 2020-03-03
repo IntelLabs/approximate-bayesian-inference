@@ -99,7 +99,7 @@ def make_pybullet_scene(ctx, physicsClientId=0):
     return nodes
 
 
-def make_pybullet_node(ctx, body_id, physicsClientId=0):
+def make_pybullet_node(ctx, body_id, physicsClientId=0, add_ref_frame=False):
     if not p.isConnected(physicsClientId=physicsClientId):
         raise Exception("Not connected to pybullet server %d" % physicsClientId)
     body_name = p.getBodyInfo(body_id, physicsClientId=physicsClientId)
@@ -109,14 +109,14 @@ def make_pybullet_node(ctx, body_id, physicsClientId=0):
         link_id = shapes[1]
         mesh_file = shapes[4]
         if mesh_file:
-            print("---- Link idx: %d Shape file: " % link_id + str(mesh_file))
-            node = CNode(geometry=make_mesh(ctx, mesh_file))
-            node_frame = CNode(geometry=make_mesh(ctx, REFERENCE_FRAME_MESH, scale=0.05))
-            node_frame.set_parent(node=node_frame, parent=node)
+            print("---- Link idx: %d Shape file: %s Dimensions:" % (link_id, str(mesh_file)) + str(shapes[3]))
+            node = CNode(geometry=make_mesh(ctx, mesh_file, scale=shapes[3][0]))
             node.pybullet_id = body_id
             node.pybullet_link_id = link_id
             nodes.append(node)
-            nodes.append(node_frame)
-
+            if add_ref_frame:
+                node_frame = CNode(geometry=make_mesh(ctx, REFERENCE_FRAME_MESH, scale=0.05))
+                node_frame.set_parent(node=node_frame, parent=node)
+                nodes.append(node_frame)
     return nodes
 

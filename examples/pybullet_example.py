@@ -1,18 +1,14 @@
 #!/usr/bin/python3
-import os
 import time
 import pybullet as pb
 import numpy as np
-import pyViewer.transformations as tf
+import transformations as tf
 from pyViewer.viewer import CScene, CPointCloud, CNode, CTransform, CEvent, CImage, CGLFWWindowManager
 from pyViewer.geometry_makers import make_mesh
 from pyViewer.models import REFERENCE_FRAME_MESH, FLOOR_MESH
 from pyViewer.pybullet_utils import init_physics, load_simulation, update_pybullet_nodes, make_pybullet_scene
 from matplotlib import cm
 from PIL import Image
-
-#os.environ["MESA_GL_VERSION_OVERRIDE"] = "3.3"
-#os.environ["MESA_GLSL_VERSION_OVERRIDE"] = "330"
 
 
 def pybullet_example():
@@ -44,31 +40,26 @@ def pybullet_example():
     # Visualizer initialization
     #####################################################
     # Load scene
-    scene = CScene(name='Intel Labs::SSR::VU Depth Renderer. javier.felip.leon@intel.com', width=800, height=600, window_manager = CGLFWWindowManager())
+    scene = CScene(name='Intel Labs::SSR::VU Depth Renderer. javier.felip.leon@intel.com', width=800, height=600, window_manager=CGLFWWindowManager())
 
     # Example reference frame size 1.0
-    nodes1 = CNode(geometry=make_mesh(scene.ctx, REFERENCE_FRAME_MESH, scale=1.0))
+    nodes1 = CNode(geometry=make_mesh(scene, REFERENCE_FRAME_MESH, scale=1.0))
     scene.insert_graph([nodes1])
 
     # Example floor
-    floor_node = CNode(geometry=make_mesh(scene.ctx, FLOOR_MESH, scale=1.0), transform=CTransform( tf.compose_matrix(translate=[0,0,-0.65]) ) )
+    floor_node = CNode(geometry=make_mesh(scene, FLOOR_MESH, scale=1.0),
+                       transform=CTransform(tf.compose_matrix(translate=[0, 0, -0.65])))
     scene.insert_graph([floor_node])
 
-    # Example point cloud
-    pcnode = CNode(geometry=CPointCloud(scene.ctx))
-    pcdata = np.random.rand(10000000 * 7).astype(np.float32)
-    pcnode.geom.set_data(pcdata)
-    scene.insert_graph([pcnode])
-
     # Example image node
-    image_display = CImage(scene.ctx)
+    image_display = CImage(scene)
     image_display.set_texture("../textures/intel_labs.png")
     image_display.set_position((-1, 0.6), (0.4, 0.4))
     imgnode = CNode(geometry=image_display)
     scene.insert_graph([imgnode])
 
     # Load pybullet geometry
-    pybullet_nodes = make_pybullet_scene(scene.ctx, physicsClientId=sim_id)
+    pybullet_nodes = make_pybullet_scene(scene, physicsClientId=sim_id)
     scene.insert_graph(pybullet_nodes)
 
     #####################################################
@@ -77,16 +68,13 @@ def pybullet_example():
     timings = dict()
     depth_image = None
     while pb.isConnected(physicsClientId=sim_id):
-        pcdata = np.random.rand(100000 * 7).astype(np.float32)
-        pcnode.geom.set_data(pcdata)
 
-        t_ini = time.time()
-
+        t_ini = tic = time.time()
         for event in scene.get_events():
             if event.type == CEvent.QUIT:
                 quit()
-
             scene.process_event(event)
+        timings["events"] = time.time() - tic
 
         tic = time.time()
         pb.stepSimulation(physicsClientId=sim_id)
@@ -97,11 +85,9 @@ def pybullet_example():
         timings["update_poses"] = time.time() - tic
 
         tic = time.time()
-
         scene.clear()
         scene.draw()
-        # Draw debug items before swap buffers (lines)
-        scene.draw_line(np.array([0, 0, 0], np.float32), np.array([1, 1, 1], np.float32), np.array([1, 0, 0, 1], np.float32), 5)
+        timings["draw"] = time.time() - tic
 
         tic = time.time()
         # Draw debug items before swap buffers (text)
@@ -109,37 +95,30 @@ def pybullet_example():
         mouse_y = int(scene.wm.get_mouse_pos()[1])
         if depth_image is not None:
             if 0 < mouse_x < depth_image.width and 0 < mouse_y < depth_image.height:
-                scene.draw_text("Depth (%d, %d): %.3f" % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))), (20, 60), (1.0, 1.0, 0.0))
-                # print(" Depth (%d, %d): %.3f " % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))))
-        scene.draw_text(repr(timings), (20, 20), color=(1.0, 1.0, 0.0, 1.0), background_color=(0, 0, 1, 1))
+                scene.draw_text("Depth (%d, %d): %.3f" % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))), (20, 60))
+                print(" Depth (%d, %d): %.3f " % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))))
+        scene.draw_text(repr(timings), (20, 20))
         timings["text"] = time.time() - tic
 
+        tic = time.time()
         scene.swap_buffers()
-
-        timings["draw"] = time.time() - tic
+        timings["swap_buffers"] = time.time() - tic
 
         tic = time.time()
-        # scene.camera.alpha = time.time() * 0.2
-        # scene.camera.camera_matrix = scene.camera.look_at(scene.camera.focus_point, scene.camera.up_vector)
         depth_image = scene.get_depth_image()
+        # Convert depth image to colormap
         image_cm = np.uint8(cm.viridis(depth_image/scene.far) * 255.0)
-        # image_bw = np.uint8(depth_image / scene.far * 255)
-        # texture_image = Image.frombytes("L", depth_image.shape, image_bw)
         texture_image = Image.frombytes("RGBA", depth_image.shape, image_cm)
         image_display.set_texture(texture_image)
-
-        # Flip depth image to match screen coordinates
+        # Flip depth image to match screen coordinates and read proper values with the cursor location
         depth_image = Image.frombytes("F", depth_image.shape, depth_image).transpose(Image.FLIP_TOP_BOTTOM)
-
-        # Do some bit order manipulation to obtain the image in the proper screen coordinates
-        # depth_shape = depth_image.shape
-        # depth_image = depth_image.reshape(-1, order="C")
-        # depth_image = np.flip(depth_image.reshape(depth_shape, order="F"), 1)
         timings["read_depth"] = time.time() - tic
 
         timings["all"] = time.time() - t_ini
-        # print(timings)
+
+        print({k: str(round(v * 1000.0, 3)) + "ms" if isinstance(v, float) else v for k, v in timings.items()})
 
 
 if __name__ == "__main__":
+
     pybullet_example()

@@ -1,11 +1,5 @@
 #!/usr/bin/python3
-import os
 import time
-try:
-    from matplotlib import cm
-    matplotlib_enabled=True
-except ModuleNotFoundError:
-    matplotlib_enabled=False
 
 from PIL import Image
 import numpy as np
@@ -13,8 +7,11 @@ import transformations as tf
 from pyViewer.viewer import CScene, CNode, CTransform, COffscreenWindowManager, CGLFWWindowManager
 from pyViewer.geometry_makers import make_mesh
 
-os.environ["MESA_GL_VERSION_OVERRIDE"] = "3.3"
-os.environ["MESA_GLSL_VERSION_OVERRIDE"] = "330"
+try:
+    from matplotlib import cm
+    matplotlib_enabled = True
+except ModuleNotFoundError:
+    matplotlib_enabled = False
 
 
 def get_occlusion_percent(img_full, img_ind, i):
@@ -25,10 +22,10 @@ def get_occlusion_percent(img_full, img_ind, i):
     img_full_mark = np.copy(img_full)
     img_full_mark[img_full == index] = 0xffffffff
     pil_image = Image.frombytes("RGBA", img_full.shape[0:2], img_full_mark)
-    pil_image.save("../semantic_images/semantic_%d_obj_%d.png" % (i, index & 0xffffffff), "PNG")
+    pil_image.save("semantic_images/semantic_%d_obj_%d.png" % (i, index & 0xffffffff), "PNG")
 
     pil_image = Image.frombytes("RGBA", img_ind.shape[0:2], img_ind)
-    pil_image.save("../semantic_images/semantic_%d_obj_%d_single.png" % (i, index & 0xffffffff), "PNG")
+    pil_image.save("semantic_images/semantic_%d_obj_%d_single.png" % (i, index & 0xffffffff), "PNG")
 
     return partial/np.float(total)
 
@@ -89,7 +86,7 @@ def semantic_render(scene, camera_positions=[(0.7, 0.7, 2)], width=100, height=1
     object_rotations = scene["rotations"]
     object_ids = scene["ids"]
     for i in range(len(object_meshes)):
-        object_node = CNode(geometry=make_mesh(viz.ctx, object_meshes[i], scale=1.0), id=object_ids[i],
+        object_node = CNode(geometry=make_mesh(viz, object_meshes[i], scale=1.0), id=object_ids[i],
                             transform=CTransform(tf.compose_matrix(translate=object_translations[i], angles=object_rotations[i])))
         object_node.geom.prog = viz.segment_program
         object_node.geom.update_shader()
@@ -141,11 +138,11 @@ def depth_render(scene, camera_positions=[(0.7, 0.7, 2)], width=100, height=100,
     if show:
         window_manager = CGLFWWindowManager()
 
-    viz = CScene(name='Intel Labs::SSR::VU Depth Renderer. javier.felip.leon@intel.com', width=width, height=height, window_manager = window_manager)
+    viz = CScene(name='Intel Labs::SSR::VU Depth Renderer. javier.felip.leon@intel.com', width=width, height=height, window_manager=window_manager)
 
     if camera_K is not None:
         viz.camera.set_intrinsics(width, height,
-                                  camera_K[0,0], camera_K[1,1], camera_K[0,2], camera_K[1,2], camera_K[0,1])
+                                  camera_K[0, 0], camera_K[1, 1], camera_K[0, 2], camera_K[1, 2], camera_K[0, 1])
 
     # Load objects from the object list
     object_meshes = scene["meshes"]
@@ -153,7 +150,7 @@ def depth_render(scene, camera_positions=[(0.7, 0.7, 2)], width=100, height=100,
     object_rotations = scene["rotations"]
     for i in range(len(object_meshes)):
 
-        object_node = CNode(geometry=make_mesh(viz.ctx, object_meshes[i], scale=1.0),
+        object_node = CNode(geometry=make_mesh(viz, object_meshes[i], scale=1.0),
                             transform=CTransform(tf.compose_matrix(translate=object_translations[i], angles=object_rotations[i])))
         viz.insert_graph([object_node])
 
@@ -183,7 +180,7 @@ def depth_render(scene, camera_positions=[(0.7, 0.7, 2)], width=100, height=100,
 
 if __name__ == "__main__":
 
-    np.random.seed(0)
+    np.random.seed(1)
 
     # Define the scene to be rendered with a list of meshes, positions and orientations
     scene = dict()
@@ -218,6 +215,7 @@ if __name__ == "__main__":
     t_ini = time.time()
     images_sem, occlusions = semantic_render_with_occlusion(scene, cameras, height=600, width=800, show=True, camera_K=K)
     t_elapsed = time.time() - t_ini
+    print("Generated %d semantic images in %3.3fs | %3.3ffps" % (len(cameras), t_elapsed, len(cameras)/t_elapsed))
 
     # Convert depth images with a colormap and save
     for i, img in enumerate(images_depth):
@@ -227,13 +225,13 @@ if __name__ == "__main__":
         else:
             image_cm = np.uint8((img / max_dist) * 255)
             pil_image = Image.frombytes("L", img.shape, image_cm)
-        pil_image.save("../depth_images/depth_%d.png" % i, "PNG")
+        pil_image.save("depth_images/depth_%d.png" % i, "PNG")
 
     # Convert semantic images with a colormap and save
     for i, img in enumerate(images_sem):
         img_fp = img.view(np.uint8)
         pil_image = Image.frombytes("RGBA", img.shape[0:2], img_fp)
-        pil_image.save("../semantic_images/semantic_%d.png" % i, "PNG")
+        pil_image.save("semantic_images/semantic_%d.png" % i, "PNG")
 
     for i,occ in enumerate(occlusions):
         print("Frame %d. Occlusions:" % i)
