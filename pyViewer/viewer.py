@@ -804,6 +804,8 @@ class CScene(object):
         self.get_active_fbo().use()
 
     def swap_buffers(self):
+        self.make_current()
+        self.ctx.copy_framebuffer(self.ctx.screen, self.get_active_fbo())
         self.wm.draw()
 
     def get_events(self):
@@ -939,8 +941,6 @@ class CScene(object):
 
         # self.ctx.finish()
 
-        self.ctx.copy_framebuffer(self.ctx.screen, self.get_active_fbo())
-
     def set_font(self, font_path=None, font_size=64, font_color=(255, 255, 255, 255), background_color=(0, 0, 0, 0)):
         self.make_current()
         if font_path is None:
@@ -949,6 +949,7 @@ class CScene(object):
         self.font_texture_map, self.font_texture_uv = self.make_font_texture(self.font, font_color, background_color)
         self.char_width, self.line_height = self.font.getsize("A")
         self.text_display = CImage(self)
+        self.text_display.draw_always = True
         self.text_display.set_texture(self.font_texture_map.transpose(Image.FLIP_TOP_BOTTOM))
 
     @staticmethod
@@ -982,6 +983,7 @@ class CScene(object):
         return teximg, uv_coords
 
     def draw_text(self, text, pos, scale=1):
+        self.set_active_fbo("rgb")
         self.make_current()
 
         # Get text height and width and transofrm them to NDC
@@ -990,7 +992,6 @@ class CScene(object):
 
         # Convert the pos in pixels to NDC. This are the positions for the corner vertices
         pos_ndc = (pos[0] / self.width * 2 - 1, pos[1] / self.height * 2 - 1)
-        # size_ndc = (text_width / self.width, text_height / self.height)
 
         # Compute vertices for the quad (4 vertices for each character)
         line_num = 0
@@ -1013,6 +1014,8 @@ class CScene(object):
             verts = np.concatenate((verts, p0, p1, p2, p2, p3, p0))
             ch_pos += 1
 
+        self.text_display.is_transparent = True
+        self.text_display.draw_always = True
         self.text_display.set_data(verts)
         self.text_display.draw(None)
 
@@ -1528,7 +1531,7 @@ class CImage(CGeometry):
         if self.vao is not None:
             self.vao.release()
             self.vao = None
-
+        self.data = data
         self.vbo = self.ctx.buffer(data)
         self.update_shader()
 

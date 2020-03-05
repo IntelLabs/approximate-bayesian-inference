@@ -46,14 +46,14 @@ def interactive_example():
     ###################################################################################################################
     # Example point cloud
     pcnode = CNode(geometry=CPointCloud(scene))
-    pcdata = np.random.rand(1000000 * 7).astype(np.float32)
+    pcdata = np.random.rand(100000 * 7).astype(np.float32)
     pcnode.geom.set_data(pcdata)
     pcnode.geom.size = 2
     scene.insert_graph([pcnode])
 
     # Example point cloud for second window
     pcnode2 = CNode(geometry=CPointCloud(scene2))
-    pcdata2 = np.random.rand(1000000 * 7).astype(np.float32)
+    pcdata2 = np.random.rand(100000 * 7).astype(np.float32)
     pcnode2.geom.set_data(pcdata2)
     pcnode2.geom.size = 2
     scene2.insert_graph([pcnode2])
@@ -177,7 +177,7 @@ def interactive_example():
     plt_points_y = []
 
     while not is_done:
-        pcdata = np.random.rand(1000 * 7).astype(np.float32)
+        pcdata = np.random.rand(10000 * 7).astype(np.float32)
         pcnode.geom.set_data(pcdata)
         pcnode2.geom.set_data(pcdata)
 
@@ -217,7 +217,7 @@ def interactive_example():
         mouse_y = int(scene.wm.get_mouse_pos()[1])
         if depth_image is not None:
             if 0 < mouse_x < depth_image.width and 0 < mouse_y < depth_image.height:
-                scene.draw_text("Depth (%d, %d): %.3f" % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))), (20, 60), scale=1)
+                scene.draw_text("Depth (%d, %d): %.3f" % (mouse_x, mouse_y, depth_image.transpose(Image.FLIP_TOP_BOTTOM).getpixel((mouse_x, mouse_y))), (20, 60), scale=1)
 
         scene.draw_text(str({k: str(round(v*1000.0, 3))+"ms" if isinstance(v, float) else v for k, v in timings.items()}), (20, 20), scale=0.5)
         timings["text"] = time.time() - tic
