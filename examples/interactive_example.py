@@ -2,9 +2,14 @@
 import time
 import numpy as np
 import transformations as tf
-from PIL import Image
 import pygame
-import matplotlib.cm as cm
+from PIL import Image
+
+try:
+    from matplotlib import cm
+    matplotlib_enabled = True
+except ModuleNotFoundError:
+    matplotlib_enabled = False
 
 from pyViewer.viewer import CScene, CPointCloud, CNode, CTransform, CEvent, CImage, CGLFWWindowManager, CFloatingText, CLinePlot, CBarPlot, CLines
 from pyViewer.geometry_makers import make_mesh, make_objects
@@ -237,7 +242,12 @@ def interactive_example():
         timings["read_depth_segmented"] = time.time() - tic
 
         tic = time.time()
-        texture_image = scene.get_depth_colormap(depth_image, cm.viridis)
+        if matplotlib_enabled:
+            texture_image = scene.get_depth_colormap(depth_image, cm.viridis)
+        else:
+            image_cm = np.uint8((np.array(depth_image) / 20) * 255)
+            texture_image = Image.frombytes("L", (image_cm.shape[1], image_cm.shape[0]), image_cm)
+
         image_seg_display.set_texture(seg_image)
         image_display.set_texture(texture_image)
         image_rgb_display.set_texture(rgb_image)

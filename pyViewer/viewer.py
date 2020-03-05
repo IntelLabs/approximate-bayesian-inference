@@ -30,6 +30,7 @@ TODO:
 - Fix lighting
 - Primitive geometry makers
 - Implement transparency handling by ordering the rendered objects by distance to the camera
+- Add colormaps
 
 - GUI
     - Screenshot button

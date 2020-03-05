@@ -9,8 +9,12 @@ from pyViewer.viewer import CScene, CPointCloud, CNode, CTransform, CEvent, CIma
 from pyViewer.geometry_makers import make_mesh
 from pyViewer.models import REFERENCE_FRAME_MESH, FLOOR_MESH
 from pyViewer.pybullet_utils import init_physics, load_simulation, update_pybullet_nodes, make_pybullet_scene
-from matplotlib import cm
 from PIL import Image
+try:
+    from matplotlib import cm
+    matplotlib_enabled = True
+except ModuleNotFoundError:
+    matplotlib_enabled = False
 
 
 def pybullet_example():
@@ -108,8 +112,12 @@ def pybullet_example():
 
         tic = time.time()
         depth_image = scene.get_depth_image()
-        image_cm = scene.get_depth_colormap(depth_image, cm.viridis)
-        image_display.set_texture(image_cm)
+        if matplotlib_enabled:
+            texture_image = scene.get_depth_colormap(depth_image, cm.viridis)
+        else:
+            image_cm = np.uint8((np.array(depth_image) / 20) * 255)
+            texture_image = Image.frombytes("L", (image_cm.shape[1], image_cm.shape[0]), image_cm)
+        image_display.set_texture(texture_image)
         timings["read_depth"] = time.time() - tic
 
         timings["all"] = time.time() - t_ini
