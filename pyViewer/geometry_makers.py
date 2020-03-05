@@ -6,11 +6,11 @@ from pyViewer.viewer import CTransform
 import transformations as tf
 
 
-def make_objects(ctx, object_paths, object_poses):
+def make_objects(ctx, object_paths, object_poses, object_ids):
     nodes = []
-    for path, pose in zip(object_paths, object_poses):
+    for path, pose, id in zip(object_paths, object_poses, object_ids):
         nodes.append(
-            CNode(geometry=make_mesh(ctx, path, scale=1.0),
+            CNode(geometry=make_mesh(ctx, path, scale=1.0), id=id,
                   transform=CTransform(tf.compose_matrix(translate=pose[0:3], angles=pose[3:])))
         )
 

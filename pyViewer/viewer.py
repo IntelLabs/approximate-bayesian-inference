@@ -4,9 +4,8 @@ import numpy as np
 import transformations as tf
 import moderngl as mgl
 import PIL
-from PIL import Image, ImageDraw, ImageFont, ImageColor
+from PIL import Image, ImageFont
 from PIL import ImageFilter
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import copy
 
 import pygame
@@ -22,11 +21,14 @@ pip install pygame              # Only for pygame window management
 pip install pybullet            # Only needed for pybullet integration
 
 TODO:
+- Read render buffer without being cropped
+- Cache the semantic/depth renderer drawing to only draw if necessary
+- Implement the semantic+depth image in a single call
+- Implement the rgb+depth image in a single call. Reuse the RGB to add on top helper gizmos and produce the color render
+- Fix camera motion
 - Shadows
-- Fix lighting?
-- Floating text
+- Fix lighting
 - Primitive geometry makers
-- Implement a proper semantic segmentation on an auxiliar buffer
 - Implement transparency handling by ordering the rendered objects by distance to the camera
 
 - GUI
@@ -275,6 +277,17 @@ class CCamera(object):
         self.sensitivity = 0.02
         self.focal_px = focal_px
         self.set_intrinsics(width, height, focal_px, focal_px, width / 2, height / 2, 0)
+
+    def __repr__(self):
+        res = "Camera"
+        res += "\n |- r: %5.3f" % self.r
+        res += "\n |- alpha: %5.3f" % self.alpha
+        res += "\n |- beta: %5.3f" % self.beta
+        res += "\n |- target: [%5.3f, %5.3f, %5.3f]" % (self.focus_point[0], self.focus_point[1], self.focus_point[2])
+        res += "\n |- up: [%5.3f, %5.3f, %5.3f]" % (self.up_vector[0], self.up_vector[1], self.up_vector[2])
+        res += "\n |- fx, fy, cx, cy: [%5.3f, %5.3f, %5.3f, %5.3f]" % (self.fx, self.fy, self.cx, self.cy)
+        res += "\n |- w, h: [%04d, %04d]\n" % (self.width, self.height)
+        return res
 
     def update(self):
         self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
@@ -552,7 +565,7 @@ class CGLFWWindowManager(CWindowManager):
             os.sys.exit(1)
 
         pyglfw.Window.hint(visible=False)
-        pyglfw.Window.hint(samples=16)
+        pyglfw.Window.hint(samples=4)
         if fullscreen:
             self.window = pyglfw.Window(200, 200, "", pyglfw.get_primary_monitor(), shared=shared)
         else:
@@ -680,6 +693,7 @@ class CGLFWWindowManager(CWindowManager):
         self.window.swap_buffers()
 
     def set_window_mode(self, size, options=None):
+        self.window.make_current()
         self.window.size = size
 
     def set_mouse_pos(self, x, y):
@@ -699,7 +713,7 @@ class CGLFWWindowManager(CWindowManager):
 
 
 class CScene(object):
-    def __init__(self, name="PyViewer", width=800, height=600, location=(0, 0), window_manager=CGLFWWindowManager(), near=0.001, far = 100.0, options=None, fullscreen=False, shared=None):
+    def __init__(self, name="PyViewer", width=800, height=600, location=(0, 0), window_manager=CGLFWWindowManager(), near=0.001, far=100.0, options=None, fullscreen=False, shared=None):
 
         # The window manager should create the OpenGL context
         self.wm = window_manager
@@ -712,38 +726,26 @@ class CScene(object):
         print("ModernGL: ", mgl.__version__)
         # self.ctx = mgl.create_standalone_context()
         self.ctx = mgl.create_context()  # Use this when binding to an existing OpenGL context
-        # self.ctx.mglo.fbo.use()
-        self.fbo = self.ctx.fbo
+        self.fbo = self.ctx.simple_framebuffer((self.width, self.height))
+        self.active_fbo = "rgb"
 
         self.width = width
         self.height = height
-
-        # Single framebuffer for the demo NUC, for some reason the demo NUC does not support separate framebuffers
-        # self.fbo = self.ctx.simple_framebuffer((self.width, self.height))
-        # self.ctx.fbo = self.fbo
-        # Auxiliar framebuffer for offscreen rendering. e.g. semantic segmented scene
-        # self.renderbuff_aux = self.ctx.renderbuffer((self.width, self.height))
-        # self.depthbuff_aux = self.ctx.depth_renderbuffer((self.width, self.height))
-        # self.fbo_aux = self.ctx.framebuffer(color_attachments=[self.renderbuff_aux], depth_attachment=self.depthbuff_aux)
-
-        # Separated framebuffers enable offscreen render and depth image
-        # self.renderbuff = self.ctx.renderbuffer((self.width, self.height))
-        # self.depthbuff = self.ctx.depth_renderbuffer((self.width, self.height))
-        # self.fbo = self.ctx.framebuffer(color_attachments=[self.renderbuff], depth_attachment=self.depthbuff)
-        # self.ctx.fbo = self.fbo
-        # self.fbo.use()
-
         self.options = options
+
+        # Create auxiliary frame buffer for semantic segmentation
+        self.fbo_seg = self.ctx.simple_framebuffer((self.width, self.height))
 
         self.ctx.viewport = (0, 0, self.width, self.height)
         self.root = CNode(id=0, parent=None, transform=CTransform(), geometry=None, material=None)
         self.nodes = [self.root]
+        self.clear_color = (0.0, 0.2, 0.2, 1.0)
 
         # TODO: BUG this two lines are a dirty solution of a problem that gets the first inserted node to
         # set the id of the root node. By having a child of the root and building the scene from there it is
         # temporarily fixed
-        dummy_node = CNode(id=None, parent=None, transform=CTransform(), geometry=None, material=None)
-        self.insert_graph([dummy_node])
+        # dummy_node = CNode(id=None, parent=None, transform=CTransform(), geometry=None, material=None)
+        # self.insert_graph([dummy_node])
 
         self.camera = CCamera(width=width, height=height, focal_px=650)
         self.render_mode = mgl.TRIANGLES
@@ -751,9 +753,6 @@ class CScene(object):
         # aspect = self.width / float(self.height)
         self.near = near
         self.far = far
-        self.depth_modes_nonlinear = 0
-        self.depth_modes_linear = 1
-        self.depth_mode = self.depth_modes_nonlinear
         # self.FoV = 60.0
         # self.perspective = self.compute_perspective_matrix(self.FoV, self.FoV / aspect, near, far)
 
@@ -772,12 +771,11 @@ class CScene(object):
         self.segment_program = self.ctx.program(vertex_shader=semantic_vertex_shader, fragment_shader=semantic_fragment_shader)
         self.geometry_program = self.ctx.program(vertex_shader=geometry_vertex_shader, fragment_shader=geometry_fragment_shader)
 
-        # time.sleep(0.1)
-
     def __del__(self):
         self.wm.close()
-        self.ctx.finish()
+        # self.ctx.finish()
         self.fbo.release()
+        self.fbo_seg.release()
         self.ctx.release()
 
     #############################################################
@@ -790,44 +788,39 @@ class CScene(object):
         self.height = height
         self.wm.set_window_mode((self.width, self.height), options=options)
         self.wm.set_window_name(name)
-        self.wm.window.make_current()
         self.wm.window.pos = location
+
+    def get_window_pos(self):
+        return self.wm.window.pos
 
     def set_window_pos(self, pos, monitor=None):
         if monitor is None:
             monitor = pyglfw.get_primary_monitor()
         self.wm.window.pos = np.array(pos) + np.array(monitor.pos)
 
-
     def make_current(self):
         self.wm.window.make_current()
+        self.get_active_fbo().use()
 
     def swap_buffers(self):
-        self.wm.window.make_current()
         self.wm.draw()
 
     def get_events(self):
-        # self.wm.window.make_current()
         pyglfw.poll_events()
-        return self.wm.get_events()
+        events = self.wm.get_events()
+
+        return events
 
     def set_window_name(self, name):
         self.wm.set_window_name(name)
 
     def set_window_mode(self, size, options):
         self.wm.window.make_current()
+        self.ctx.screen.viewport = (0, 0, self.width, self.height)
+        self.ctx.screen.scissor = None
+        self.fbo_seg = self.ctx.simple_framebuffer(size)
+        self.fbo = self.ctx.simple_framebuffer(size)
         return self.wm.set_window_mode(size, options)
-
-    @staticmethod
-    def fig2img(fig):
-        canvas = FigureCanvas(fig)
-        canvas.draw()
-        canvas_size = canvas.get_width_height()
-        plot_data = np.fromstring(canvas.tostring_argb(), dtype='uint8').reshape((canvas_size[0], canvas_size[1], 4))
-        plot_data[:, :, [0, 3]] = plot_data[:, :, [3, 0]]  # Convert to RGBA
-        plot_image = Image.frombytes(mode="RGBA", data=plot_data, size=canvas_size).transpose(
-            method=Image.FLIP_TOP_BOTTOM)
-        return plot_image
 
     @staticmethod
     def compute_ortho_matrix(left, right, bottom, top, near, far):
@@ -840,29 +833,6 @@ class CScene(object):
         ortho[1, 3] = - (top + bottom) / (top - bottom)
         ortho[2, 3] = - (far + near) / (far - near)
         return ortho
-
-    # def compute_perspective_matrix(self, fov_h, fov_v, near, far):
-    #     Sh = 1 / np.tan((fov_h/2.0) * (np.pi/180.0))
-    #     Sv = 1 / np.tan((fov_v / 2.0) * (np.pi / 180.0))
-    #     persp = np.eye(4)
-    #     persp[0, 0] = Sh
-    #     persp[1, 1] = Sv
-    #
-    #     # Non-linear depth projection
-    #     if self.depth_mode == self.depth_modes_nonlinear:
-    #         persp[2, 2] = -(far + near) / (far - near)
-    #         persp[2, 3] = -(2.0 * far * near) / (far - near)
-    #
-    #     # Linear depth projection
-    #     elif self.depth_mode == self.depth_modes_linear:
-    #         persp[2, 2] = -2 / (far - near)        # Linearly scales depth to the [0,2] range
-    #         persp[2, 3] = -near                       # Shifts depth to normalized device coordinates [-1,1]
-    #     else:
-    #         raise ValueError
-    #
-    #     persp[3, 3] = 0.0
-    #     persp[3, 2] = -1
-    #     return persp
 
     @staticmethod
     def compute_projection_matrix(fx, fy, cx, cy, near, far, skew=0):
@@ -891,10 +861,6 @@ class CScene(object):
                 for c in n.children:
                     self.insert_graph([c])
 
-    def clear(self, r=0.0, g=0.2, b=0.2, a=1.0):
-        self.wm.window.make_current()
-        self.ctx.clear(r, g, b, a)
-
     def delete_graph(self, n):
         if n is not None:
             while len(n.children) > 0:
@@ -920,8 +886,31 @@ class CScene(object):
                 del self.nodes[i]
                 break
 
-    def draw(self, camera=None, use_ortho=False):
+    def get_active_fbo(self):
+        if self.active_fbo == "rgb":
+            return self.fbo
+        elif self.active_fbo == "seg":
+            return self.fbo_seg
+        else:
+            raise ValueError("Unknown active fbo type. Valid values are 'rgb' or 'seg'")
+
+    def set_active_fbo(self, fbo_type="rgb"):
+        if fbo_type == "rgb" or fbo_type == "seg":
+            self.active_fbo = fbo_type
+        else:
+            raise ValueError("Unknown fbo type. Valid values are 'rgb' or 'seg'")
+
+    def clear(self, color_rgba=(0.0, 0.2, 0.2, 1.0)):
+        self.clear_color = color_rgba
         self.wm.window.make_current()
+        self.ctx.clear(color_rgba[0], color_rgba[1], color_rgba[2], color_rgba[3])
+
+    def draw(self, camera=None, use_ortho=False, fbo=None):
+        if fbo is not None:
+            self.set_active_fbo(fbo)
+        else:
+            self.set_active_fbo("rgb")
+        self.make_current()
 
         if camera is None:
             camera = self.camera
@@ -947,10 +936,12 @@ class CScene(object):
         else:
             self.root.draw(self.perspective, camera.camera_matrix, np.eye(4), self.render_mode)
 
-        self.ctx.finish()
+        # self.ctx.finish()
+
+        self.ctx.copy_framebuffer(self.ctx.screen, self.get_active_fbo())
 
     def set_font(self, font_path=None, font_size=64, font_color=(255, 255, 255, 255), background_color=(0, 0, 0, 0)):
-        self.wm.window.make_current()
+        self.make_current()
         if font_path is None:
             font_path = str(Path(__file__).resolve().parent) + "/../fonts/FiraCode-Medium.ttf"
         self.font = ImageFont.truetype(font_path, font_size)
@@ -990,7 +981,7 @@ class CScene(object):
         return teximg, uv_coords
 
     def draw_text(self, text, pos, scale=1):
-        self.wm.window.make_current()
+        self.make_current()
 
         # Get text height and width and transofrm them to NDC
         char_width = self.char_width / self.width
@@ -1021,103 +1012,89 @@ class CScene(object):
             verts = np.concatenate((verts, p0, p1, p2, p2, p3, p0))
             ch_pos += 1
 
-        self.text_display.set_vertices(verts)
+        self.text_display.set_data(verts)
         self.text_display.draw(None)
 
-    def draw_line(self, a, b, color, thickness, write_on_depth_buffer=True):
-        self.wm.window.make_current()
+    def semantic_render(self):
+        self.set_active_fbo("seg")
+        self.make_current()
 
-        if not write_on_depth_buffer:
-            self.ctx.disable(mgl.DEPTH_TEST)
-
-        line = CPointCloud(self)
-        line.set_data(np.concatenate((a, color, b, color)))
-        line.size = thickness
-        line.draw_mode = mgl.LINE_STRIP
-        line.draw(mvp=np.matmul(self.perspective, self.camera.camera_matrix))
-        del line
-
-        if not write_on_depth_buffer:
-            self.ctx.enable(mgl.DEPTH_TEST)
-
-    def get_depth_image(self):
-        self.wm.window.make_current()
-
-        zFar = self.far
-        zNear = self.near
-
-        try:
-            depth_buffer = np.frombuffer(
-                self.fbo.read(viewport=self.ctx.viewport, components=1, dtype='f4', attachment=-1),
-                dtype=np.dtype('f4')).reshape(self.width, self.height)
-            z_ndc = depth_buffer * 2.0 - 1.0  # Convert back to Normalized Device Coordinates [0,1] -> [-1,1]
-            if self.depth_mode == self.depth_modes_linear:
-                depth_image = z_ndc * (zFar - zNear) + zNear  # Linear inverse depth
-            elif self.depth_mode == self.depth_modes_nonlinear:
-                depth_image = (2.0 * zNear * zFar) / (zFar + zNear - z_ndc * (zFar-zNear))  # Non-linear inverse depth
-            else:
-                raise Exception("Invalid depth mode")
-            return depth_image
-
-        except ValueError as e:
-            print(e)
-            return np.zeros((self.width, self.height))
-
-    def get_render_image(self):
-        self.wm.window.make_current()
-
-        try:
-            img_buffer = np.frombuffer(
-                self.fbo.read(viewport=self.ctx.viewport, components=4, dtype='f1', attachment=1),
-                dtype=np.dtype('uint8')).reshape(self.width, self.height, 4)
-
-            return img_buffer
-
-        except ValueError as e:
-            print(e)
-            return np.zeros((self.width, self.height, 4))
-
-    # TODO: The change of buffers does not seem to work properly and the
-    def get_semantic_image(self):
-        self.wm.window.make_current()
-
-        print("pyViewer warning!!. get_semantic_image(self) just returns a render of the geometry objects")
-
+        # Set geometry nodes to visible and all Image, Plot, Line and Text nodes not visible and load semantic shaders
         visibility = [False] * len(self.nodes)
+        programs = [None] * len(self.nodes)
         for i, n in enumerate(self.nodes):
-            if n.geom is not None and isinstance(n.geom, CGeometry) and not isinstance(n.geom, CImage):
+            if n.geom is not None:
+                programs[i] = n.geom.prog
+            if n.geom is not None and isinstance(n.geom, CGeometry) and not \
+                    isinstance(n.geom, CImage) and not \
+                    isinstance(n.geom, CPlot) and not \
+                    isinstance(n.geom, CLines) and not \
+                    isinstance(n.geom, CFloatingText):
                 visibility[i] = n.visible
                 n.set_is_visible(True)
+                n.geom.prog = self.segment_program
+                n.geom.update_shader()
             else:
                 visibility[i] = n.visible
                 n.set_is_visible(False)
 
-        # Activate the auxiliar framebuffer to render the semantic image
-        # self.fbo_aux.use()
-        self.clear(0, 0, 0, 0)
-        self.draw()
-        self.ctx.finish()
+        # Render the semantic image
+        self.clear((0, 0, 0, 0))  # Clear previous data
+        self.draw(fbo="seg")      # Draw semantic image
+        # self.ctx.finish()         # Wait untill all draw calls have been executed
 
-        # Activate the main framebuffer after the semantic render has been done
-        # self.fbo.use()
-
+        # Restore visibility to the previous state
+        self.set_active_fbo("rgb")
+        self.make_current()
         for i, n in enumerate(self.nodes):
             n.set_is_visible(visibility[i])
+            if n.geom is not None and programs[i] is not None and not isinstance(n.geom, CImage):
+                n.geom.prog = programs[i]
+                n.geom.update_shader()
 
-        img_buffer = np.zeros((self.width, self.height, 4))
-        try:
-            img_buffer = np.frombuffer(
-                # self.fbo_aux.read(viewport=self.ctx.viewport, components=4, dtype='f1', attachment=1),
-                # dtype=np.dtype('uint8')).reshape(self.width, self.height, 4)
-                self.fbo.read(viewport=self.ctx.viewport, components=4, dtype='f1', attachment=1),
-                dtype=np.dtype('uint8')).reshape(self.width, self.height, 4)
-        except ValueError as e:
-            print(e)
+    def get_depth_image(self):
+        self.semantic_render()
 
-        return np.copy(img_buffer)
+        depth_buffer = np.frombuffer(
+            self.fbo_seg.read(components=1, dtype='f4', attachment=-1),
+            dtype=np.dtype('f4')).reshape(self.fbo_seg.width, self.fbo_seg.height) * 2.0 - 1.0
+
+        # Non-linear inverse depth transformation
+        depth_buffer = (2.0 * self.near * self.far) / (self.far + self.near - depth_buffer * (self.far - self.near))
+        img = Image.frombuffer('F', (self.fbo.width, self.fbo.height), depth_buffer, 'raw', 'F', 0, -1).transpose(Image.FLIP_TOP_BOTTOM)
+        return img
+
+    def get_depth_colormap(self, depth_image, colormap_f):
+        image_cm = np.uint8(colormap_f(np.array(depth_image) / self.far) * 255.0)
+        texture_image = Image.frombytes("RGBA", depth_image.size, image_cm)
+        return texture_image
+
+    def get_render_image(self):
+        self.make_current()
+        img = Image.frombytes('RGBA', (self.fbo.width, self.fbo.height), self.fbo.read(components=4), 'raw', 'RGBA', 0, -1).transpose(Image.FLIP_TOP_BOTTOM)
+        return img
+
+    def get_semantic_image(self):
+        self.semantic_render()
+        img = Image.frombytes('RGBA', (self.fbo_seg.width, self.fbo_seg.height), self.fbo_seg.read(components=4), 'raw', 'RGBA', 0, -1).transpose(Image.FLIP_TOP_BOTTOM)
+        return img
+
+    def get_depth_and_semantic_image(self):
+        self.semantic_render()
+        img_sem = Image.frombytes('RGBA', (self.fbo_seg.width, self.fbo_seg.height), self.fbo_seg.read(components=4), 'raw', 'RGBA', 0, -1).transpose(Image.FLIP_TOP_BOTTOM)
+
+        depth_buffer = np.frombuffer(
+            self.fbo_seg.read(components=1, dtype='f4', attachment=-1),
+            dtype=np.dtype('f4')).reshape(self.fbo_seg.width, self.fbo_seg.height) * 2.0 - 1.0
+
+        # Non-linear inverse depth transformation
+        depth_buffer = (2.0 * self.near * self.far) / (self.far + self.near - depth_buffer * (self.far - self.near))
+        img_depth = Image.frombuffer('F', (self.fbo.width, self.fbo.height), depth_buffer, 'raw', 'F', 0, -1).transpose(Image.FLIP_TOP_BOTTOM)
+
+        return img_depth, img_sem
 
     def process_event(self, event):
-        self.wm.window.make_current()
+        self.make_current()
 
         self.camera.process_event(event)
 
@@ -1138,7 +1115,7 @@ class CScene(object):
                 quit()
 
         if event.type == CEvent.VIDEORESIZE:
-            self.wm.set_window_mode((event.data[1], event.data[2]), options=self.options)
+            self.set_window_mode((event.data[1], event.data[2]), options=self.options)
             self.width = event.data[1]
             self.height = event.data[2]
             self.wm.viewport = (0, 0, self.width, self.height)
@@ -1146,7 +1123,15 @@ class CScene(object):
             print("Window resize (w:%d, h:%d)" % (event.data[1], event.data[2]), event.data[0])
 
     def __repr__(self):
-        return repr(self.root)
+        res = "=====\n"
+        res += "Scene\n"
+        res += "=====\n"
+        res += repr(self.camera)
+        res += "=====\n"
+        res += "Graph\n"
+        res += "=====\n"
+        res += repr(self.root)
+        return res
 
 
 class CNode(object):
@@ -1191,9 +1176,9 @@ class CNode(object):
         for c in self.children:
             res = res + repr(c)
         if self.parent is not None:
-            res = res + "id: %d, p: %d, " % (self.id, self.parent.id) + repr(self.t) + "\n"
+            res = res + "id: %03d, p: %03d," % (self.id, self.parent.id) + repr(self.t) + "\n"
         else:
-            res = res + "[ROOT] id: %d, " % self.id + repr(self.t) + "\n"
+            res = res + "id: %03d, p: N/A," % self.id + repr(self.t) + " [ROOT] \n"
         return res
 
 
@@ -1249,6 +1234,8 @@ class CGeometry(object):
 
     def update_shader(self):
         self.scene.make_current()
+        if self.vbo is None:
+            return
         if self.vao is not None:
             self.vao.release()
             self.vao = None
@@ -1276,9 +1263,7 @@ class CGeometry(object):
             self.ibo = None
         if indices is not None:
             self.ibo = self.ctx.buffer(indices)
-            self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 3f 3f 4f', 'in_vert', 'in_norm', 'in_text', 'in_color')], index_buffer=self.ibo)
-        else:
-            self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 3f 3f 4f', 'in_vert', 'in_norm', 'in_text', 'in_color')])
+        self.update_shader()
 
     def draw(self, mvp, mode=mgl.TRIANGLE_STRIP, id=0):
         self.scene.make_current()
@@ -1320,7 +1305,6 @@ class CGeometry(object):
             self.vao.render(mode)
 
     def __del__(self):
-        self.scene.make_current()
         del self.data
         if self.vbo is not None:
             self.vbo.release()
@@ -1373,13 +1357,10 @@ class CPointCloud(object):
         if self.vbo is not None:
             self.vbo.release()
             self.vbo = None
-        if self.vao is not None:
-            self.vao.release()
-            self.vao = None
         self.data = data
         if data is not None:
             self.vbo = self.ctx.buffer(data)
-            self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
+            self.update_shader()
 
     def draw(self, mvp, mode=mgl.POINTS, id=0):
         self.scene.make_current()
@@ -1523,7 +1504,7 @@ class CImage(CGeometry):
         self.vbo = self.ctx.buffer(self.data)
         self.offset = offset
         self.size = size
-        self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '2f 2f 4f', 'in_vert', 'in_text', 'in_color')])
+        self.update_shader()
 
     def set_texture(self, image, build_mipmaps=False):
         super().set_texture(image, build_mipmaps)
@@ -1531,7 +1512,14 @@ class CImage(CGeometry):
     def draw(self, mvp, mode=mgl.TRIANGLES, id=0):
         super().draw(mvp, mode, id)
 
-    def set_vertices(self, vertex_data):
+    def update_shader(self):
+        self.scene.make_current()
+        if self.vao is not None:
+            self.vao.release()
+            self.vao = None
+        self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '2f 2f 4f', 'in_vert', 'in_text', 'in_color')])
+
+    def set_data(self, data, indices=None):
         self.scene.make_current()
         if self.vbo is not None:
             self.vbo.release()
@@ -1540,8 +1528,8 @@ class CImage(CGeometry):
             self.vao.release()
             self.vao = None
 
-        self.vbo = self.ctx.buffer(vertex_data)
-        self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '2f 2f 4f', 'in_vert', 'in_text', 'in_color')])
+        self.vbo = self.ctx.buffer(data)
+        self.update_shader()
 
 
 class CLines(CGeometry):
@@ -1555,6 +1543,13 @@ class CLines(CGeometry):
         self.line_width = 1
         self.data = np.array([], dtype=np.float32)
 
+    def update_shader(self):
+        self.scene.make_current()
+        if self.vao is not None:
+            self.vao.release()
+            self.vao = None
+        self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
+
     def set_data(self, data, indices=None):
         self.scene.make_current()
         if data is None or len(data) == 0:
@@ -1563,7 +1558,7 @@ class CLines(CGeometry):
 
         self.data = data
         self.vbo = self.ctx.buffer(self.data)
-        self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
+        self.update_shader()
 
     def draw(self, mvp, mode=mgl.LINES, id=0):
         self.scene.make_current()
@@ -1771,6 +1766,13 @@ class CPlot(CGeometry):
         l1 = self.make_line(np.array([x_norm, 0], dtype=np.float32), np.array([x_norm, 1], dtype=np.float32), color_data)
         self.verts_markers = l1
 
+    def update_shader(self):
+        self.scene.make_current()
+        if self.vao is not None:
+            self.vao.release()
+            self.vao = None
+        self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
+
     def draw(self, mvp, mode=mgl.LINES, id=0):
         self.scene.make_current()
         self.ctx.line_width = self.line_width
@@ -1778,7 +1780,7 @@ class CPlot(CGeometry):
         self.data = np.concatenate((self.verts_markers, self.verts_data, self.verts_frame, self.verts_ticks, self.verts_tick_lines, self.verts_label))
         if len(self.data) > 0:
             self.vbo = self.ctx.buffer(self.data)
-            self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
+            self.update_shader()
             super().draw(mvp, mode, id)
 
     # This version is just with points (for GL_LINES)
@@ -2007,13 +2009,12 @@ class CBarPlot(CPlot):
         self.data = np.concatenate((self.verts_markers, self.verts_frame, self.verts_ticks, self.verts_tick_lines, self.verts_label))
         if len(self.data) > 0:
             self.vbo = self.ctx.buffer(self.data)
-            self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
+            self.update_shader()
             CGeometry.draw(self, mvp, mode, id)
 
         # Draw second triangles
         self.draw_mode = mgl.TRIANGLES
         if len(self.verts_data) > 0:
             self.vbo = self.ctx.buffer(self.verts_data)
-            self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
+            self.update_shader()
             CGeometry.draw(self, mvp, mode, id)
-

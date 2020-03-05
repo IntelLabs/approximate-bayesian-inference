@@ -14,18 +14,19 @@ except ModuleNotFoundError:
     matplotlib_enabled = False
 
 
-def get_occlusion_percent(img_full, img_ind, i):
+def get_occlusion_percent(img_full, img_ind, i, save_images=False):
     index = np.max(img_ind)
     total = np.sum(img_ind == index)
     partial = np.sum(img_full == index)
 
-    img_full_mark = np.copy(img_full)
-    img_full_mark[img_full == index] = 0xffffffff
-    pil_image = Image.frombytes("RGBA", img_full.shape[0:2], img_full_mark)
-    pil_image.save("semantic_images/semantic_%d_obj_%d.png" % (i, index & 0xffffffff), "PNG")
+    if save_images:
+        img_full_mark = np.copy(img_full)
+        img_full_mark[img_full == index] = 0xffffffff
+        pil_image = Image.frombytes("RGBA", img_full.shape[0:2], img_full_mark)
+        pil_image.save("semantic_images/semantic_%d_obj_%d.png" % (i, index & 0xffffffff), "PNG")
 
-    pil_image = Image.frombytes("RGBA", img_ind.shape[0:2], img_ind)
-    pil_image.save("semantic_images/semantic_%d_obj_%d_single.png" % (i, index & 0xffffffff), "PNG")
+        pil_image = Image.frombytes("RGBA", img_ind.shape[0:2], img_ind)
+        pil_image.save("semantic_images/semantic_%d_obj_%d_single.png" % (i, index & 0xffffffff), "PNG")
 
     return partial/np.float(total)
 
@@ -58,7 +59,7 @@ def semantic_render_with_occlusion(scene, camera_positions=[(0.7, 0.7, 2)], widt
     for j, img_full in enumerate(full_images):  # For each full image
         occlusion_per_object = []
         for i in range(len(individual_object_images[j])):    # Compute occlusion for each individual object
-            occ = get_occlusion_percent(img_full.view(np.uint32), individual_object_images[j][i].view(np.uint32), j)
+            occ = get_occlusion_percent(img_full.view(np.uint32), individual_object_images[j][i].view(np.uint32), j, save_images=True)
             occlusion_per_object.append(occ)
         occlusions.append(occlusion_per_object)
 
@@ -88,8 +89,6 @@ def semantic_render(scene, camera_positions=[(0.7, 0.7, 2)], width=100, height=1
     for i in range(len(object_meshes)):
         object_node = CNode(geometry=make_mesh(viz, object_meshes[i], scale=1.0), id=object_ids[i],
                             transform=CTransform(tf.compose_matrix(translate=object_translations[i], angles=object_rotations[i])))
-        object_node.geom.prog = viz.segment_program
-        object_node.geom.update_shader()
         viz.insert_graph([object_node])
 
     #####################################################
@@ -110,19 +109,22 @@ def semantic_render(scene, camera_positions=[(0.7, 0.7, 2)], width=100, height=1
         cam.update()
 
         # Clear scene and render
-        viz.clear(0.0, 0.0, 0.0, 0.0)
+        viz.clear()
         viz.draw()
-        seg_images[i] = np.copy(viz.get_semantic_image())
+        img = np.asarray(viz.get_semantic_image())
+        seg_images[i] = img.reshape(width, height, 4)
         viz.swap_buffers()
 
         if show:
             time.sleep(0.033)
 
         # Check that the image is properly generated
-        if np.sum(seg_images[i]) == 0:
-            print("WARNING!!!: Generated blank image!. This is an unknown bug of the renderer. Retry. Scene params:", scene)
-            i = i-1
-            retries += 1
+        if np.sum(np.array(seg_images[i])) == 0:
+            print("WARNING!!!: Generated blank image!. Maybe objects are out of sight?")
+            print(viz)
+            # print("WARNING!!!: Generated blank image!. This is an unknown bug of the renderer. Retry. Scene params:", scene)
+            # i = i-1
+            # retries += 1
         i = i + 1
 
     del viz
@@ -190,9 +192,10 @@ if __name__ == "__main__":
 
     # "../models/duck/duck_vhacd.obj"
 
-    scene["translations"] = [(0, 0, 0), (-0.05, 0.2, 0.05), (0, -0.2, 0)]
+    scene["translations"] = [(0, 0, 0), (-0.05, 0.2, 0.05), (0, 0.1, 0)]
     scene["rotations"] = [(0, 0, 0), (-1.57, 0, 0), (0, 0, 0)]
-    scene["ids"] = [np.random.randint(0, 2**24-1) & 0xffffffff for _ in range(3)]
+    # scene["ids"] = [np.random.randint(0, 2**24-1) & 0xffffffff for _ in range(3)]
+    scene["ids"] = [i+50 for i in range(3)]
 
     max_dist = 1.5
 
@@ -203,7 +206,7 @@ if __name__ == "__main__":
 
     # Define the list of camera positions to render the scene from
     cameras = list()
-    for i in range(5):
+    for i in range(10):
         cameras.append(np.random.uniform(low=(-np.pi, -np.pi, 0.1), high=(np.pi, np.pi, max_dist)))
 
     # Generate depth images for the defined scene, camera positions, camera parameters and resolution
@@ -212,20 +215,20 @@ if __name__ == "__main__":
     t_elapsed = time.time() - t_ini
     print("Generated %d depth images in %3.3fs | %3.3ffps" % (len(cameras), t_elapsed, len(cameras)/t_elapsed))
 
+    # Convert depth images with a colormap and save
+    for i, img in enumerate(images_depth):
+        if matplotlib_enabled:
+            image_cm = np.uint8(cm.viridis(np.array(img) / max_dist) * 255)
+            pil_image = Image.frombytes("RGBA", img.size, image_cm)
+        else:
+            image_cm = np.uint8((np.array(img) / max_dist) * 255)
+            pil_image = Image.frombytes("L", img.size, image_cm)
+        pil_image.save("depth_images/depth_%d.png" % i, "PNG")
+
     t_ini = time.time()
     images_sem, occlusions = semantic_render_with_occlusion(scene, cameras, height=600, width=800, show=True, camera_K=K)
     t_elapsed = time.time() - t_ini
     print("Generated %d semantic images in %3.3fs | %3.3ffps" % (len(cameras), t_elapsed, len(cameras)/t_elapsed))
-
-    # Convert depth images with a colormap and save
-    for i, img in enumerate(images_depth):
-        if matplotlib_enabled:
-            image_cm = np.uint8(cm.viridis(img / max_dist) * 255)
-            pil_image = Image.frombytes("RGBA", img.shape, image_cm)
-        else:
-            image_cm = np.uint8((img / max_dist) * 255)
-            pil_image = Image.frombytes("L", img.shape, image_cm)
-        pil_image.save("depth_images/depth_%d.png" % i, "PNG")
 
     # Convert semantic images with a colormap and save
     for i, img in enumerate(images_sem):

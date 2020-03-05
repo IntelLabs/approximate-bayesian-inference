@@ -1,3 +1,5 @@
+# TODO: THERE IS A BUG WITH TEXTURES IN THE PYBULLET EXAMPLE
+
 #!/usr/bin/python3
 import time
 import pybullet as pb
@@ -51,16 +53,16 @@ def pybullet_example():
                        transform=CTransform(tf.compose_matrix(translate=[0, 0, -0.65])))
     scene.insert_graph([floor_node])
 
+    # Load pybullet geometry
+    pybullet_nodes = make_pybullet_scene(scene, physicsClientId=sim_id)
+    scene.insert_graph(pybullet_nodes)
+
     # Example image node
     image_display = CImage(scene)
     image_display.set_texture("../textures/intel_labs.png")
     image_display.set_position((-1, 0.6), (0.4, 0.4))
     imgnode = CNode(geometry=image_display)
     scene.insert_graph([imgnode])
-
-    # Load pybullet geometry
-    pybullet_nodes = make_pybullet_scene(scene, physicsClientId=sim_id)
-    scene.insert_graph(pybullet_nodes)
 
     #####################################################
     # Main Loop
@@ -106,12 +108,8 @@ def pybullet_example():
 
         tic = time.time()
         depth_image = scene.get_depth_image()
-        # Convert depth image to colormap
-        image_cm = np.uint8(cm.viridis(depth_image/scene.far) * 255.0)
-        texture_image = Image.frombytes("RGBA", depth_image.shape, image_cm)
-        image_display.set_texture(texture_image)
-        # Flip depth image to match screen coordinates and read proper values with the cursor location
-        depth_image = Image.frombytes("F", depth_image.shape, depth_image).transpose(Image.FLIP_TOP_BOTTOM)
+        image_cm = scene.get_depth_colormap(depth_image, cm.viridis)
+        image_display.set_texture(image_cm)
         timings["read_depth"] = time.time() - tic
 
         timings["all"] = time.time() - t_ini
