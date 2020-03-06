@@ -21,12 +21,9 @@ pip install pygame              # Only for pygame window management
 pip install pybullet            # Only needed for pybullet integration
 
 TODO:
-- Read render buffer without being cropped
-- Cache the semantic/depth renderer drawing to only draw if necessary
-- Implement the semantic+depth image in a single call
 - Implement the rgb+depth image in a single call. Reuse the RGB to add on top helper gizmos and produce the color render
-- Fix camera motion
 - Shadows
+- Add material class
 - Fix lighting
 - Primitive geometry makers
 - Implement transparency handling by ordering the rendered objects by distance to the camera
@@ -275,7 +272,7 @@ class CCamera(object):
         self.focus_point = np.array(focus)
         self.up_vector = np.array(up)
         self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
-        self.sensitivity = 0.02
+        self.sensitivity = 0.005
         self.focal_px = focal_px
         self.set_intrinsics(width, height, focal_px, focal_px, width / 2, height / 2, 0)
 
@@ -344,9 +341,11 @@ class CCamera(object):
         if event.type == CEvent.MOUSEBUTTONDOWN:
             if event.data is None:
                 pass
+            # Scroll down
             elif event.data[1] == 4:
-                self.r = self.r - 0.1
+                self.r = self.r - 0.1 if self.r > 0.1 else 0.01
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
+            # Scroll up
             elif event.data[1] == 5:
                 self.r = self.r + 0.1
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
@@ -358,13 +357,15 @@ class CCamera(object):
                     self.alpha = 0
 
                 self.beta = self.beta + event.data[1][1] * self.sensitivity
-                if self.beta > 2*np.pi or self.beta < -2*np.pi:
-                    self.beta = 0
+                if self.beta > 2*np.pi:
+                    self.beta = 2*np.pi
+                elif self.beta < -2*np.pi:
+                    self.beta = -2 * np.pi
 
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
 
             if event.data[2][1] and np.abs(event.data[1][0]) < 50 and np.abs(event.data[1][1]) < 50:
-                self.focus_point = self.focus_point + event.data[1][0] * self.camera_matrix[0, 0:3] * self.sensitivity
+                self.focus_point = self.focus_point - event.data[1][0] * self.camera_matrix[0, 0:3] * self.sensitivity
                 self.focus_point = self.focus_point + event.data[1][1] * self.camera_matrix[1, 0:3] * self.sensitivity
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
 
@@ -384,9 +385,9 @@ class CCamera(object):
             beta = np.pi/2 - 0.01
         elif beta < -np.pi/2:
             beta = -np.pi/2 + 0.01
-        position[0] = self.r * np.cos(alpha) * np.cos(beta)
-        position[1] = self.r * np.sin(alpha) * np.cos(beta)
-        position[2] = self.r * np.sin(beta)
+        position[0] = self.r * np.cos(alpha) * np.cos(beta) + focus[0]
+        position[1] = self.r * np.sin(alpha) * np.cos(beta) + focus[1]
+        position[2] = self.r * np.sin(beta) + focus[2]
 
         # print("Dist: ", np.sqrt(np.matmul(position, position.transpose())))
 
@@ -1274,9 +1275,8 @@ class CGeometry(object):
         if self.data is None or len(self.data) == 0:
             return
 
-        # TODO: Extract lights outside
         if 'Light' in self.prog:
-            self.prog['Light'].value = (1.0, 1.0, 3.0)
+            self.prog['Light'].value = self.scene.light
 
         if 'Mvp' in self.prog:
             self.prog['Mvp'].value = tuple(np.array(mvp, np.float32).reshape(-1, order='F'))
