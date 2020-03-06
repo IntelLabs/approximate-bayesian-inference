@@ -1039,10 +1039,12 @@ class CScene(object):
             if event.data[0][1] < cursor_margin:
                 self.wm.set_mouse_pos(event.data[0][0], self.height - cursor_margin)
 
+        # Close program
         if event.type == CEvent.KEYDOWN:
             if event.type == CEvent.QUIT:
                 quit()
 
+        # Resize framebuffers
         if event.type == CEvent.VIDEORESIZE:
             self.set_window_mode((event.data[1], event.data[2]), options=self.options)
             self.width = event.data[1]
@@ -1050,6 +1052,9 @@ class CScene(object):
             self.wm.viewport = (0, 0, self.width, self.height)
             self.camera.set_resolution(self.width, self.height)
             print("Window resize (w:%d, h:%d)" % (event.data[1], event.data[2]), event.data[0])
+
+        if event.type == CEvent.KEYUP and event.data[0] == pyglfw.api.GLFW_KEY_W:
+            self.ctx.wireframe = not self.ctx.wireframe
 
     def __repr__(self):
         res = "=====\n"

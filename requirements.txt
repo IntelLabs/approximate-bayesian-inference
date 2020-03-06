@@ -1,6 +1,6 @@
 numpy
 pywavefront
-moderngl==5.6.0
+moderngl>=5.6.0
 pyopengl
 pillow
 pyglfw
