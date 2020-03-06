@@ -2,7 +2,6 @@
 import time
 import numpy as np
 import transformations as tf
-import pygame
 from PIL import Image
 
 try:
@@ -20,13 +19,11 @@ def interactive_example():
     ###################################################################################################################
     # Example create empty scenes with windows
     scene = CScene(name='Intel Labs::SSR::VU Depth Renderer. javier.felip.leon@intel.com',
-                   width=640, height=480,
-                   window_manager=CGLFWWindowManager(), options=pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE)
+                   width=640, height=480, window_manager=CGLFWWindowManager())
     scene.set_window_pos((0, 0))
     # Example create a secondary scene
-    scene2 = CScene(name='Depth Renderer. Second window.',
-                    width=640, height=480,
-                    window_manager=CGLFWWindowManager(), options=pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE)
+    scene2 = CScene(name='Depth Renderer. Second window example',
+                    width=640, height=480, window_manager=CGLFWWindowManager())
     scene2.set_window_pos((700, 0))
     # Optional: Set fon face and sizes
     scene.set_font(font_size=64, font_color=(255, 255, 255, 255), background_color=(0, 0, 0, 0))

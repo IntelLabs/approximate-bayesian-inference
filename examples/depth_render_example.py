@@ -1,9 +1,9 @@
 #!/usr/bin/python3
 import time
-
 from PIL import Image
 import numpy as np
 import transformations as tf
+
 from pyViewer.viewer import CScene, CNode, CTransform, COffscreenWindowManager, CGLFWWindowManager
 from pyViewer.geometry_makers import make_mesh
 
