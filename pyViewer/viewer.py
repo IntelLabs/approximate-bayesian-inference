@@ -8,18 +8,10 @@ from PIL import Image, ImageFont
 from PIL import ImageFilter
 import copy
 
-import pygame
 from pyglfw import pyglfw
 from pathlib import Path
 
 '''
-REQUIREMENTS
-
-pip install ModernGL numpy PIL pywavefront
-pip install pyglfw              # Only for glfw window management (recommended)
-pip install pygame              # Only for pygame window management
-pip install pybullet            # Only needed for pybullet integration
-
 TODO:
 - Implement the rgb+depth image in a single call. Reuse the RGB to add on top helper gizmos and produce the color render
 - Shadows
@@ -302,34 +294,14 @@ class CCamera(object):
         self.cx = cx
         self.cy = cy
 
-    #TODO: Remove pygame specific keys here
     def process_event(self, event):
         if event.type == CEvent.KEYDOWN:
-            if event.data[0] == pygame.K_w:
-                self.focus_point = self.focus_point + np.array([0, 0, -0.1])
-                self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
-            if event.data[0] == pygame.K_a:
-                self.focus_point = self.focus_point + np.array([-0.1, 0.0, 0.0])
-                self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
-            if event.data[0] == pygame.K_s:
-                self.focus_point = self.focus_point + np.array([0, 0, 0.1])
-                self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
-            if event.data[0] == pygame.K_d:
-                self.focus_point = self.focus_point + np.array([0.1, 0.0, 0.0])
-                self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
-            if event.data[0] == pygame.K_q:
-                self.focus_point = self.focus_point + np.array([0, 0.1, 0.0])
-                self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
-            if event.data[0] == pygame.K_e:
-                self.focus_point = self.focus_point + np.array([0, -0.1, 0.0])
-                self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
-
-            if event.data[0] == pygame.K_v:
+            if event.data[0] == pyglfw.api.GLFW_KEY_V:
                 print("CAMERA PARAMETERS")
                 print("Camera: a:", self.alpha, " b:", self.beta, " r:", self.r)
                 print("Focus point: ", self.focus_point, " Up vector:", self.up_vector)
 
-            if event.data[0] == pygame.K_c:
+            if event.data[0] == pyglfw.api.GLFW_KEY_C:
                 self.alpha = 0.0
                 self.beta = 0.0
                 self.r = 5.0
