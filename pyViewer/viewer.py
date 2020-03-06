@@ -437,127 +437,61 @@ class CEvent(object):
 # WINDOW MANAGER IMPLEMENTATIONS
 ############################################################################################################
 class CWindowManager(object):
-    @staticmethod
-    def init_display():
+    def init_display(self, fullscreen=False, shared=None):
         raise NotImplementedError()
 
-    @staticmethod
-    def set_window_name(name):
+    def set_window_name(self, name):
         raise NotImplementedError()
 
-    @staticmethod
-    def get_events():
+    def get_events(self):
         raise NotImplementedError()
 
-    @staticmethod
-    def set_window_mode(size, options):
+    def set_window_mode(self, size, options):
         raise NotImplementedError()
 
-    @staticmethod
-    def set_mouse_pos(x, y):
+    def set_window_pos(self, pos):
         raise NotImplementedError()
 
-    @staticmethod
-    def get_mouse_pos():
+    def set_mouse_pos(self, x, y):
+        raise NotImplementedError()
+
+    def get_mouse_pos(self):
+        raise NotImplementedError()
+
+    def make_current(self):
         raise NotImplementedError()
 
 
 class COffscreenWindowManager(CWindowManager):
-    @staticmethod
-    def init_display():
+    def init_display(self, fullscreen=False, shared=None):
         pass
 
-    @staticmethod
-    def set_window_name(name):
+    def set_window_name(self, name):
         pass
 
-    @staticmethod
-    def get_events():
+    def get_events(self):
         return []
 
-    @staticmethod
-    def set_window_mode(size, options):
+    def set_window_mode(self, size, options):
         pass
 
-    @staticmethod
-    def set_mouse_pos(x, y):
+    def set_window_pos(self, pos):
         pass
 
-    @staticmethod
-    def get_mouse_pos():
+    def set_mouse_pos(self, x, y):
+        pass
+
+    def get_mouse_pos(self):
         return [0, 0]
 
     def draw(self):
         pass
 
+    def close(self):
+        pass
 
-class CPygameEvent(CEvent):
-    def __init__(self):
-        super(CPygameEvent, self).__init__()
-
-    def initialize(self, event):
-        self.source_obj = event
-        if event.type == pygame.QUIT:
-            self.type = CEvent.QUIT
-        elif event.type == pygame.KEYDOWN:
-            self.type = CEvent.KEYDOWN
-            self.data = (event.key, event.mod, event.unicode)
-        elif event.type == pygame.KEYUP:
-            self.type = CEvent.KEYUP
-            self.data = (event.key, event.mod)
-        elif event.type == pygame.MOUSEMOTION:
-            self.type = CEvent.MOUSEMOTION
-            self.data = (event.pos, event.rel, event.buttons)
-        elif event.type == pygame.MOUSEBUTTONUP:
-            self.type = CEvent.MOUSEBUTTONUP
-            self.data = (event.pos, event.button)
-        elif event.type == pygame.MOUSEBUTTONDOWN:
-            self.type = CEvent.MOUSEBUTTONDOWN
-            self.data = (event.pos, event.button)
-        elif event.type == pygame.VIDEORESIZE:
-            self.type = CEvent.VIDEORESIZE
-            self.data = (event.size, event.w, event.h)
-        elif event.type == pygame.VIDEOEXPOSE:
-            self.type = CEvent.VIDEOEXPOSE
-
-
-class CPygameWindowManager(CWindowManager):
-    @staticmethod
-    def init_display():
-        pygame.init()
-        pygame.font.init()
-
-    @staticmethod
-    def set_window_name(name):
-        pygame.display.set_caption(name)
-
-    @staticmethod
-    def get_events():
-        events = pygame.event.get()
-        event_list = []
-        for ev in events:
-            event = CPygameEvent()
-            event.initialize(ev)
-            event_list.append(event)
-        return event_list
-
-    @staticmethod
-    def draw():
-        pygame.display.flip()
-        pygame.time.wait(1)
-
-    @staticmethod
-    def set_window_mode(size, options):
-        return pygame.display.set_mode(size, options)
-
-    @staticmethod
-    def set_mouse_pos(x, y):
-        pygame.mouse.set_pos(x, y)
-
-    @staticmethod
-    def get_mouse_pos():
-        pos = pygame.mouse.get_pos()
-        return pos
+    def make_current(self):
+        pass
 
 
 class CGLFWWindowManager(CWindowManager):
@@ -690,6 +624,9 @@ class CGLFWWindowManager(CWindowManager):
         self.window.event_queue.clear()
         return res
 
+    def make_current(self):
+        self.window.make_current()
+
     def draw(self):
         self.window.make_current()
         self.window.swap_buffers()
@@ -697,6 +634,10 @@ class CGLFWWindowManager(CWindowManager):
     def set_window_mode(self, size, options=None):
         self.window.make_current()
         self.window.size = size
+
+    def set_window_pos(self, pos):
+        self.window.make_current()
+        self.window.pos = pos
 
     def set_mouse_pos(self, x, y):
         self.window.cursor_pos = (x, y)
@@ -706,7 +647,9 @@ class CGLFWWindowManager(CWindowManager):
         return pos
 
     def close(self):
-        self.window.close()
+        if self.window is not None:
+            self.window.close()
+            self.window = None
         # pyglfw.terminate()
 
 ############################################################################################################
@@ -726,8 +669,10 @@ class CScene(object):
         self.init_display(name, width, height, location=location, options=options, fullscreen=fullscreen, shared=shared_window)
 
         print("ModernGL: ", mgl.__version__)
-        # self.ctx = mgl.create_standalone_context()
-        self.ctx = mgl.create_context()  # Use this when binding to an existing OpenGL context
+        if isinstance(window_manager, COffscreenWindowManager):
+            self.ctx = mgl.create_standalone_context()
+        else:
+            self.ctx = mgl.create_context()
         self.fbo = self.ctx.simple_framebuffer((self.width, self.height))
         self.active_fbo = "rgb"
 
@@ -774,11 +719,17 @@ class CScene(object):
         self.geometry_program = self.ctx.program(vertex_shader=geometry_vertex_shader, fragment_shader=geometry_fragment_shader)
 
     def __del__(self):
+        # print("CScene::__del__")
+        self.delete_graph(self.root)
+        self.ctx.finish()
         self.wm.close()
-        # self.ctx.finish()
-        self.fbo.release()
-        self.fbo_seg.release()
-        self.ctx.release()
+        if self.fbo is not None:
+            self.fbo.release()
+            self.fbo = None
+        if self.fbo_seg is not None:
+            self.fbo_seg.release()
+            self.fbo_seg = None
+        # self.ctx.release()
 
     #############################################################
     # GENERIC INITIALIZATION METHODS. WRAPPER TO HANDLE MULTIPLE WINDOW MANAGERS (pygame, pyglfw, ...)
@@ -790,7 +741,7 @@ class CScene(object):
         self.height = height
         self.wm.set_window_mode((self.width, self.height), options=options)
         self.wm.set_window_name(name)
-        self.wm.window.pos = location
+        self.wm.set_window_pos(location)
 
     def get_window_pos(self):
         return self.wm.window.pos
@@ -801,12 +752,13 @@ class CScene(object):
         self.wm.window.pos = np.array(pos) + np.array(monitor.pos)
 
     def make_current(self):
-        self.wm.window.make_current()
+        self.wm.make_current()
         self.get_active_fbo().use()
 
     def swap_buffers(self):
         self.make_current()
-        self.ctx.copy_framebuffer(self.ctx.screen, self.get_active_fbo())
+        if self.ctx.screen is not None:
+            self.ctx.copy_framebuffer(self.ctx.screen, self.get_active_fbo())
         self.wm.draw()
 
     def get_events(self):
@@ -906,7 +858,7 @@ class CScene(object):
 
     def clear(self, color_rgba=(0.0, 0.2, 0.2, 1.0)):
         self.clear_color = color_rgba
-        self.wm.window.make_current()
+        self.wm.make_current()
         self.ctx.clear(color_rgba[0], color_rgba[1], color_rgba[2], color_rgba[3])
 
     def draw(self, camera=None, use_ortho=False, fbo=None):
@@ -1319,6 +1271,10 @@ class CGeometry(object):
         if self.ibo is not None:
             self.ibo.release()
             self.ibo = None
+        if self.texture is not None:
+            self.texture.release()
+            self.texture = None
+
         # TODO: This needs fixing to release the shader if it is a local shader
         # if self.prog is not None:
         #     self.prog.release()

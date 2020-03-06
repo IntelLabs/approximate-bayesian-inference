@@ -10,6 +10,7 @@ from pyViewer.geometry_makers import make_mesh
 from pyViewer.models import REFERENCE_FRAME_MESH
 import numpy as np
 
+
 def init_physics(use_gui, timestep=0.01, physicsClientId=0):
     pType = p.GUI
     if not use_gui:
@@ -72,20 +73,14 @@ def update_pybullet_nodes(nodes, physicsClientId=0):
                 b.t = CTransform(mat)
             else:
                 state = p.getLinkState(b.pybullet_id, b.pybullet_link_id, physicsClientId=physicsClientId)
-                # pos_com = np.array(state[0])  # Position of the local inertial frame in the world coordinates
-                # rot_com = state[1]  # Position of the local inertial frame in the world coordinates
-                # pos_local = np.array(state[2])  # Link position in local inertial frame
-                # rot_local = state[3]  # Link orientation in local inertial frame
                 pos = state[4]  # Link World absolute position
                 rot = state[5]  # Link World absolute orientation
-                # rot_com = tf.quaternion_matrix([rot_com[3],rot_com[0],rot_com[1],rot_com[2]])
-                # rot_local = tf.quaternion_matrix([rot_local[3],rot_local[0],rot_local[1],rot_local[2]])
                 mat = tf.quaternion_matrix([rot[3], rot[0], rot[1], rot[2]])
                 mat[0:3, 3] = pos
                 b.t = CTransform(np.matmul(b.pybullet_v_mat, mat))
 
 
-def make_pybullet_scene(ctx, physicsClientId=0):
+def make_pybullet_scene(ctx, physicsClientId=0, add_ref_frame=False):
     root = CNode(0, None, CTransform())
     nodes = [root]
     if not p.isConnected(physicsClientId=physicsClientId):
@@ -93,7 +88,7 @@ def make_pybullet_scene(ctx, physicsClientId=0):
 
     nbodies = p.getNumBodies(physicsClientId=physicsClientId)
     for i in range(nbodies):
-        node = make_pybullet_node(ctx, i, physicsClientId)
+        node = make_pybullet_node(ctx, i, physicsClientId, add_ref_frame)
         node[0].set_parent(node=node[0], parent=root)
         nodes.extend(node)
     return nodes
