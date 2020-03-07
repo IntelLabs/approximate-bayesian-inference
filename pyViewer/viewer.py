@@ -58,25 +58,80 @@ void main()
 geometry_vertex_shader = '''
 #version 330 core
 
-uniform mat4 Mvp;
+uniform mat4 persp_m;
+uniform mat4 view_m;
+uniform mat4 model_m;
 
 in vec3 in_vert;
 in vec3 in_norm;
 in vec3 in_text;
 in vec4 in_color;
 
-out vec3 v_vert;
-out vec3 v_norm;
-out vec3 v_text;
-out vec4 v_color;
+out VS_OUT {
+    vec3 v_vert;
+    vec3 v_norm;
+    vec3 v_text;
+    vec4 v_color;
+} vs_out;
 
 void main() {
-	v_vert = in_vert;
-	v_norm = in_norm;
-	v_text = in_text;
-	v_color = in_color;
-	gl_Position = Mvp * vec4(v_vert, 1.0);
-} 
+//    mat3 normalMatrix = mat3(transpose(inverse(view_m * model_m)));
+    mat3 normalMatrix = mat3(view_m * model_m);
+    vs_out.v_vert = in_vert;
+    vs_out.v_norm = normalize(vec3(persp_m * vec4(normalMatrix * in_norm, 0.0)));
+    vs_out.v_text = in_text;
+    vs_out.v_color = in_color;
+    gl_Position = persp_m * view_m * model_m * vec4(vs_out.v_vert, 1.0);
+}
+'''
+
+geometry_normals_geometry_shader = '''
+#version 330 core
+layout (triangles) in;
+layout (line_strip, max_vertices = 6) out;
+
+uniform float normal_len;
+
+in VS_OUT {
+    vec3 v_vert;
+    vec3 v_norm;
+    vec3 v_text;
+    vec4 v_color;
+} gs_in[];
+
+out VS_OUT {
+    vec3 v_vert;
+    vec3 v_norm;
+    vec3 v_text;
+    vec4 v_color;
+} gs_out;
+
+void GenerateLine(int index)
+{
+    gs_out.v_vert = gs_in[index].v_vert;
+    gl_Position = gl_in[index].gl_Position;
+    gs_out.v_norm = gs_in[index].v_norm;
+    gs_out.v_text = gs_in[index].v_text;
+    gs_out.v_color = gs_in[index].v_color;
+    EmitVertex();
+    
+    float dist = length(gl_Position);
+    
+    gs_out.v_vert = gs_in[index].v_vert + gs_in[index].v_norm * normal_len * dist;
+    gl_Position = gl_in[index].gl_Position + vec4(gs_in[index].v_norm * normal_len * dist, 0.0);
+    gs_out.v_norm = gs_in[index].v_norm;
+    gs_out.v_text = gs_in[index].v_text;
+    gs_out.v_color = gs_in[index].v_color;
+    EmitVertex();
+    EndPrimitive();
+}
+
+void main()
+{
+    GenerateLine(0); // first vertex normal
+    GenerateLine(1); // second vertex normal
+    GenerateLine(2); // third vertex normal
+}
 '''
 
 geometry_fragment_shader = '''
@@ -85,23 +140,25 @@ geometry_fragment_shader = '''
 uniform int normal_colors;
 uniform sampler2D Texture;
 
-in vec3 v_vert;
-in vec3 v_norm;
-in vec3 v_text;
-in vec4 v_color;
+in VS_OUT {
+    vec3 v_vert;
+    vec3 v_norm;
+    vec3 v_text;
+    vec4 v_color;
+} fs_in;
 
 out vec4 f_color;
 
 void main()
 {
-    vec4 color = texture(Texture, v_text.xy);
+    vec4 color = texture(Texture, fs_in.v_text.xy);
     if (normal_colors > 0)
     {
-        f_color = color + v_color + vec4(v_norm.xyz, 0);
+        f_color = vec4(fs_in.v_norm, 1);
     }
     else
     {
-        f_color = color + v_color;
+        f_color = color + fs_in.v_color;
     }
 }
 '''
@@ -672,6 +729,7 @@ class CScene(object):
         # aspect = self.width / float(self.height)
         self.near = near
         self.far = far
+        self.show_normals = False
         # self.FoV = 60.0
         # self.perspective = self.compute_perspective_matrix(self.FoV, self.FoV / aspect, near, far)
 
@@ -687,8 +745,15 @@ class CScene(object):
 
         self.set_font(font_path=None, font_size=48)
 
-        self.segment_program = self.ctx.program(vertex_shader=semantic_vertex_shader, fragment_shader=semantic_fragment_shader)
-        self.geometry_program = self.ctx.program(vertex_shader=geometry_vertex_shader, fragment_shader=geometry_fragment_shader)
+        self.segment_program = self.ctx.program(vertex_shader=semantic_vertex_shader,
+                                                fragment_shader=semantic_fragment_shader)
+
+        self.geometry_program = self.ctx.program(vertex_shader=geometry_vertex_shader,
+                                                 fragment_shader=geometry_fragment_shader)
+
+        self.geometry_normals_program = self.ctx.program(vertex_shader=geometry_vertex_shader,
+                                                         fragment_shader=geometry_fragment_shader,
+                                                         geometry_shader=geometry_normals_geometry_shader)
 
     def __del__(self):
         # print("CScene::__del__")
@@ -942,7 +1007,7 @@ class CScene(object):
         self.text_display.is_transparent = True
         self.text_display.draw_always = True
         self.text_display.set_data(verts)
-        self.text_display.draw(None)
+        self.text_display.draw(None, None, None)
 
     def semantic_render(self):
         self.set_active_fbo("seg")
@@ -962,6 +1027,7 @@ class CScene(object):
                 visibility[i] = n.visible
                 n.set_is_visible(True)
                 n.geom.prog = self.segment_program
+                n.geom.norm_prog = None
                 n.geom.update_shader()
             else:
                 visibility[i] = n.visible
@@ -979,6 +1045,7 @@ class CScene(object):
             n.set_is_visible(visibility[i])
             if n.geom is not None and programs[i] is not None and not isinstance(n.geom, CImage):
                 n.geom.prog = programs[i]
+                n.geom.norm_prog = self.geometry_normals_program
                 n.geom.update_shader()
 
     def get_depth_image(self):
@@ -1056,6 +1123,9 @@ class CScene(object):
         if event.type == CEvent.KEYUP and event.data[0] == pyglfw.api.GLFW_KEY_W:
             self.ctx.wireframe = not self.ctx.wireframe
 
+        if event.type == CEvent.KEYUP and event.data[0] == pyglfw.api.GLFW_KEY_N:
+            self.show_normals = not self.show_normals
+
     def __repr__(self):
         res = "=====\n"
         res += "Scene\n"
@@ -1099,9 +1169,8 @@ class CNode(object):
 
     def draw(self, perspective, view, model, mode):
         model = np.matmul(model, self.t.t)
-        mvp = np.matmul(perspective, np.matmul(view, model))
         if self.geom is not None and self.visible:
-            self.geom.draw(mvp, mode, id=self.id)
+            self.geom.draw(perspective, view, model, mode, id=self.id)
         for c in self.children:
             c.draw(perspective, view, model, mode)
 
@@ -1124,6 +1193,7 @@ class CGeometry(object):
         self.data = []
         self.vbo = None
         self.vao = None
+        self.vaon = None
         self.ibo = None
         if vshader is not None:
             self.vertex_shader = open(vshader).read()
@@ -1134,6 +1204,7 @@ class CGeometry(object):
         else:
             self.fragment_shader = default_fragment_shader
         self.prog = self.ctx.program(vertex_shader=self.vertex_shader, fragment_shader=self.fragment_shader)
+        self.norm_prog = self.ctx.program(vertex_shader=self.vertex_shader, fragment_shader=self.fragment_shader, geometry_shader=geometry_normals_geometry_shader)
         self.draw_mode = None
         self.texture = self.ctx.texture(size=(16, 16), components=4, data=np.zeros((16,16,4), dtype=np.uint8).tobytes())
         self.is_transparent = False
@@ -1173,10 +1244,17 @@ class CGeometry(object):
         if self.vao is not None:
             self.vao.release()
             self.vao = None
+        if self.vaon is not None:
+            self.vaon.release()
+            self.vaon = None
         if self.ibo is not None:
             self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 3f 3f 4f', 'in_vert', 'in_norm', 'in_text', 'in_color')], index_buffer=self.ibo)
+            if self.norm_prog is not None:
+                self.vaon = self.ctx.vertex_array(self.norm_prog, [(self.vbo, '3f 3f 3f 4f', 'in_vert', 'in_norm', 'in_text', 'in_color')], index_buffer=self.ibo)
         else:
             self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 3f 3f 4f', 'in_vert', 'in_norm', 'in_text', 'in_color')])
+            if self.norm_prog is not None:
+                self.vaon = self.ctx.vertex_array(self.norm_prog, [(self.vbo, '3f 3f 3f 4f', 'in_vert', 'in_norm', 'in_text', 'in_color')])
 
     def set_data(self, data, indices=None):
         self.scene.make_current()
@@ -1188,9 +1266,6 @@ class CGeometry(object):
         if self.vbo is not None:
             self.vbo.release()
             self.vbo = None
-        if self.vao is not None:
-            self.vao.release()
-            self.vao = None
         self.vbo = self.ctx.buffer(data)
         if self.ibo is not None:
             self.ibo.release()
@@ -1199,31 +1274,48 @@ class CGeometry(object):
             self.ibo = self.ctx.buffer(indices)
         self.update_shader()
 
-    def draw(self, mvp, mode=mgl.TRIANGLE_STRIP, id=0):
+    def set_uniforms(self, prog, perspective, view, model, id, tex_id):
+        if 'Light' in prog:
+            prog['Light'].value = self.scene.light
+
+        if 'Mvp' in prog:
+            mvp = np.matmul(perspective, np.matmul(view, model))
+            prog['Mvp'].value = tuple(np.array(mvp, np.float32).reshape(-1, order='F'))
+
+        if 'persp_m' in prog:
+            prog['persp_m'].value = tuple(np.array(perspective, np.float32).reshape(-1, order='F'))
+
+        if 'view_m' in prog:
+            prog['view_m'].value = tuple(np.array(view, np.float32).reshape(-1, order='F'))
+
+        if 'model_m' in prog:
+            prog['model_m'].value = tuple(np.array(model, np.float32).reshape(-1, order='F'))
+
+        if 'Texture' in prog:
+            prog['Texture'].value = tex_id
+
+        if 'id' in prog:
+            prog['id'].value = id & 0xffffffff
+
+    def draw(self, perspective, view, model, mode=mgl.TRIANGLE_STRIP, id=0):
         self.scene.make_current()
         if self.data is None or len(self.data) == 0:
             return
 
-        if 'Light' in self.prog:
-            self.prog['Light'].value = self.scene.light
-
-        if 'Mvp' in self.prog:
-            self.prog['Mvp'].value = tuple(np.array(mvp, np.float32).reshape(-1, order='F'))
-
         tex_id = np.array(0, np.uint16)
-        if 'Texture' in self.prog:
-            self.prog['Texture'].value = tex_id
-        if self.texture is not None:
-            self.texture.use(tex_id)
-
-        if 'id' in self.prog:
-            self.prog['id'].value = id & 0xffffffff
-
-        if 'normal_colors' in self.prog:
-            self.prog['normal_colors'].value = 0
+        self.set_uniforms(self.prog, perspective, view, model, id, tex_id)
+        if self.norm_prog is not None:
+            self.set_uniforms(self.norm_prog, perspective, view, model, id, tex_id)
+            if 'normal_len' in self.norm_prog:
+                self.norm_prog['normal_len'].value = 0.05
+            if 'normal_colors' in self.norm_prog:
+                self.norm_prog['normal_colors'].value = int(self.scene.show_normals)
 
         if self.draw_mode is not None:
             mode = self.draw_mode
+
+        if self.texture is not None:
+            self.texture.use(tex_id)
 
         if self.draw_always:
             self.ctx.disable(mgl.DEPTH_TEST)
@@ -1233,9 +1325,13 @@ class CGeometry(object):
             self.ctx.enable(mgl.BLEND)
             self.ctx.blend_func = (mgl.SRC_ALPHA, mgl.ONE_MINUS_SRC_ALPHA)
             self.vao.render(mode)
+            if self.scene.show_normals and self.vaon is not None:
+                self.vaon.render(mode)
         else:
             self.ctx.disable(mgl.BLEND)
             self.vao.render(mode)
+            if self.scene.show_normals and self.vaon is not None:
+                self.vaon.render(mode)
 
     def __del__(self):
         del self.data
@@ -1299,14 +1395,14 @@ class CPointCloud(object):
             self.vbo = self.ctx.buffer(data)
             self.update_shader()
 
-    def draw(self, mvp, mode=mgl.POINTS, id=0):
+    def draw(self, perspective, view, model, mode=mgl.POINTS, id=0):
         self.scene.make_current()
         if self.data is None or len(self.data) == 0:
             return
 
         self.ctx.disable(mgl.BLEND)
         self.ctx.enable(mgl.DEPTH_TEST)
-
+        mvp = np.matmul(perspective, np.matmul(view, model))
         self.prog['Mvp'].value = tuple(np.array(mvp, np.float32).reshape(-1, order='F'))
         if self.draw_mode is not None:
             mode = self.draw_mode
@@ -1397,12 +1493,12 @@ class CFloatingText(CGeometry):
             ch_pos += 1
         self.set_data(verts)
 
-    def draw(self, mvp, mode=mgl.TRIANGLES, id=0):
+    def draw(self, perspective, view, model, mode=mgl.TRIANGLES, id=0):
         if self.camera_facing:
             # Compute camera facing rotation matrix
             pass
 
-        super().draw(mvp, mode, id)
+        super().draw(perspective, view, model, mode, id)
 
 
 class CImage(CGeometry):
@@ -1411,6 +1507,7 @@ class CImage(CGeometry):
         self.vertex_shader = image_vertex_shader
         self.fragment_shader = image_fragment_shader
         self.prog = self.ctx.program(vertex_shader=self.vertex_shader, fragment_shader=self.fragment_shader)
+        self.norm_prog = None
         self.draw_mode = mgl.TRIANGLES
         self.texture = None
         self.offset = (0.0, 0.0)
@@ -1446,8 +1543,8 @@ class CImage(CGeometry):
     def set_texture(self, image, build_mipmaps=False):
         super().set_texture(image, build_mipmaps)
 
-    def draw(self, mvp, mode=mgl.TRIANGLES, id=0):
-        super().draw(mvp, mode, id)
+    def draw(self, perspective, view, model, mode=mgl.TRIANGLES, id=0):
+        super().draw(perspective, view, model, mode, id)
 
     def update_shader(self):
         self.scene.make_current()
@@ -1497,10 +1594,10 @@ class CLines(CGeometry):
         self.vbo = self.ctx.buffer(self.data)
         self.update_shader()
 
-    def draw(self, mvp, mode=mgl.LINES, id=0):
+    def draw(self, perspective, view, model, mode=mgl.LINES, id=0):
         self.scene.make_current()
         self.ctx.line_width = self.line_width
-        super().draw(mvp, mode, id)
+        super().draw(perspective, view, model, mode, id)
 
 
 class CPlot(CGeometry):
@@ -1710,7 +1807,7 @@ class CPlot(CGeometry):
             self.vao = None
         self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
 
-    def draw(self, mvp, mode=mgl.LINES, id=0):
+    def draw(self, perspective, view, model, mode=mgl.LINES, id=0):
         self.scene.make_current()
         self.ctx.line_width = self.line_width
 
@@ -1718,7 +1815,7 @@ class CPlot(CGeometry):
         if len(self.data) > 0:
             self.vbo = self.ctx.buffer(self.data)
             self.update_shader()
-            super().draw(mvp, mode, id)
+            super().draw(perspective, view, model, mode, id)
 
     # This version is just with points (for GL_LINES)
     @staticmethod
@@ -1938,7 +2035,7 @@ class CBarPlot(CPlot):
             print("ERROR: CLinePlot range of values is 0 for X or Y axis.")
             return data
 
-    def draw(self, mvp, mode=mgl.LINES, id=0):
+    def draw(self, perspective, view, model, mode=mgl.LINES, id=0):
         self.scene.make_current()
         # Draw first lines
         self.draw_mode = mgl.LINES
@@ -1947,11 +2044,11 @@ class CBarPlot(CPlot):
         if len(self.data) > 0:
             self.vbo = self.ctx.buffer(self.data)
             self.update_shader()
-            CGeometry.draw(self, mvp, mode, id)
+            CGeometry.draw(self, perspective, view, model, mode, id)
 
         # Draw second triangles
         self.draw_mode = mgl.TRIANGLES
         if len(self.verts_data) > 0:
             self.vbo = self.ctx.buffer(self.verts_data)
             self.update_shader()
-            CGeometry.draw(self, mvp, mode, id)
+            CGeometry.draw(self, perspective, view, model, mode, id)
