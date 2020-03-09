@@ -379,11 +379,11 @@ class CCamera(object):
                 pass
             # Scroll down
             elif event.data[1] == 4:
-                self.r = self.r - 0.1 if self.r > 0.1 else 0.01
+                self.r = self.r - self.sensitivity*10 if self.r > self.sensitivity*10 else self.sensitivity
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
             # Scroll up
             elif event.data[1] == 5:
-                self.r = self.r + 0.1
+                self.r = self.r + self.sensitivity*10
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
 
         if event.type == CEvent.MOUSEMOTION:
@@ -393,10 +393,10 @@ class CCamera(object):
                     self.alpha = 0
 
                 self.beta = self.beta + event.data[1][1] * self.sensitivity
-                if self.beta > 2*np.pi:
-                    self.beta = 2*np.pi
-                elif self.beta < -2*np.pi:
-                    self.beta = -2 * np.pi
+                if self.beta > np.pi/1.9:
+                    self.beta = np.pi/1.9
+                elif self.beta < -np.pi/1.9:
+                    self.beta = -np.pi/1.9
 
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
 
