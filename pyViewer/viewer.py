@@ -61,6 +61,7 @@ geometry_vertex_shader = '''
 uniform mat4 persp_m;
 uniform mat4 view_m;
 uniform mat4 model_m;
+uniform int normal_colors;
 
 in vec3 in_vert;
 in vec3 in_norm;
@@ -80,7 +81,14 @@ void main() {
     vs_out.v_vert = in_vert;
     vs_out.v_norm = normalize(vec3(persp_m * vec4(normalMatrix * in_norm, 0.0)));
     vs_out.v_text = in_text;
-    vs_out.v_color = in_color;
+    if (normal_colors > 0)
+    {
+        vs_out.v_color = vec4(abs(in_norm), 1);    
+    }
+    else
+    {
+        vs_out.v_color = in_color;    
+    }
     gl_Position = persp_m * view_m * model_m * vec4(vs_out.v_vert, 1.0);
 }
 '''
@@ -116,7 +124,6 @@ void GenerateLine(int index)
     EmitVertex();
     
     float dist = length(gl_Position);
-    
     gs_out.v_vert = gs_in[index].v_vert + gs_in[index].v_norm * normal_len * dist;
     gl_Position = gl_in[index].gl_Position + vec4(gs_in[index].v_norm * normal_len * dist, 0.0);
     gs_out.v_norm = gs_in[index].v_norm;
@@ -154,7 +161,7 @@ void main()
     vec4 color = texture(Texture, fs_in.v_text.xy);
     if (normal_colors > 0)
     {
-        f_color = vec4(fs_in.v_norm, 1);
+        f_color = fs_in.v_color;
     }
     else
     {
@@ -1307,7 +1314,7 @@ class CGeometry(object):
         if self.norm_prog is not None:
             self.set_uniforms(self.norm_prog, perspective, view, model, id, tex_id)
             if 'normal_len' in self.norm_prog:
-                self.norm_prog['normal_len'].value = 0.05
+                self.norm_prog['normal_len'].value = 0.03
             if 'normal_colors' in self.norm_prog:
                 self.norm_prog['normal_colors'].value = int(self.scene.show_normals)
 
@@ -1326,11 +1333,13 @@ class CGeometry(object):
             self.ctx.blend_func = (mgl.SRC_ALPHA, mgl.ONE_MINUS_SRC_ALPHA)
             self.vao.render(mode)
             if self.scene.show_normals and self.vaon is not None:
+                self.ctx.enable(mgl.DEPTH_TEST)
                 self.vaon.render(mode)
         else:
             self.ctx.disable(mgl.BLEND)
             self.vao.render(mode)
             if self.scene.show_normals and self.vaon is not None:
+                self.ctx.enable(mgl.DEPTH_TEST)
                 self.vaon.render(mode)
 
     def __del__(self):
