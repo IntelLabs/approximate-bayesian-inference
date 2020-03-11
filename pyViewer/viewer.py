@@ -317,6 +317,7 @@ class CTransform(object):
         translation = self.t[0:3, 3]
         matrix = np.hstack((x_vec.reshape(3, 1), y_vec.reshape(3, 1), z_vec.reshape(3, 1), translation.reshape(3, 1)))
         matrix = np.vstack((matrix, np.array([0, 0, 0, 1])))
+        self.t = matrix
         return matrix
 
 
@@ -327,6 +328,7 @@ class CCamera(object):
         self.beta = beta
         self.focus_point = np.array(focus)
         self.up_vector = np.array(up)
+        self.position = None
         self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
         self.sensitivity = 0.005
         self.focal_px = focal_px
@@ -437,6 +439,7 @@ class CCamera(object):
         y_vec = y_vec / np.linalg.norm(y_vec)
 
         trans = tf.compose_matrix(translate=-position)
+        self.position = position
         rot = np.eye(4)
         rot[0, 0:3] = x_vec
         rot[1, 0:3] = y_vec
@@ -748,7 +751,7 @@ class CScene(object):
                                                self.near, self.far)
 
         self.perspective = np.matmul(ndc_matrix, proj_matrix)
-        self.perspective = ndc_matrix
+        # self.perspective = ndc_matrix
 
         self.set_font(font_path=None, font_size=48)
 
@@ -936,8 +939,6 @@ class CScene(object):
         else:
             self.root.draw(self.perspective, camera.camera_matrix, np.eye(4), self.render_mode)
 
-        # self.ctx.finish()
-
     def set_font(self, font_path=None, font_size=64, font_color=(255, 255, 255, 255), background_color=(0, 0, 0, 0)):
         self.make_current()
         if font_path is None:
@@ -1055,8 +1056,19 @@ class CScene(object):
                 n.geom.norm_prog = self.geometry_normals_program
                 n.geom.update_shader()
 
-    def get_depth_image(self):
-        self.semantic_render()
+    def get_depth_px(self, px, py, do_render=True):
+        if do_render:
+            self.semantic_render()
+
+        depth_buffer = np.frombuffer(
+            self.fbo_seg.read(components=1, dtype='f4', attachment=-1),
+            dtype=np.dtype('f4')).reshape(self.fbo_seg.width, self.fbo_seg.height) * 2.0 - 1.0
+
+        return depth_buffer[px, py]
+
+    def get_depth_image(self, do_render=True):
+        if do_render:
+            self.semantic_render()
 
         depth_buffer = np.frombuffer(
             self.fbo_seg.read(components=1, dtype='f4', attachment=-1),
@@ -1096,6 +1108,31 @@ class CScene(object):
 
         return img_depth, img_sem
 
+    def get_3d_point(self, px, py):
+        # Get depth at the sampled point
+        pz = self.get_depth_image(do_render=True).transpose(Image.FLIP_TOP_BOTTOM).getpixel((px, py))
+
+        # Get the ray through the desired target pixel
+        ray_pixel = np.array([(px - self.camera.cx) / self.camera.fx,
+                              (py - self.camera.cy) / self.camera.fy,
+                              1])
+
+        # Compute the point in camera frame (x:right, y:down, z:forward) by using the measured depth at the pixel
+        point_cam = ray_pixel * pz
+
+        # Add the homogeneous coordinate
+        point_cam = np.concatenate((point_cam, np.array([1])))
+
+        # Get the camera coordinates in the world frame with the inverse camera transform and a roation due to
+        # OpenGl camera having the z axis pointing outside the screen.
+        tf = CTransform(np.linalg.inv(self.camera.camera_matrix)) @ \
+             CTransform(np.array([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]]))
+
+        # tf.look_at(self.camera.focus_point, self.camera.up_vector)
+        point_world = tf.t @ point_cam
+
+        return point_world
+
     def process_event(self, event):
         self.make_current()
 
@@ -1127,9 +1164,16 @@ class CScene(object):
             self.camera.set_resolution(self.width, self.height)
             print("Window resize (w:%d, h:%d)" % (event.data[1], event.data[2]), event.data[0])
 
+        # Camera focus point
+        if event.type == CEvent.KEYUP and event.data[0] == pyglfw.api.GLFW_KEY_F:
+            self.camera.focus_point = self.get_3d_point(self.wm.get_mouse_pos()[0], self.wm.get_mouse_pos()[1])[0:3]
+            self.camera.update()
+
+        # Toggle wireframe
         if event.type == CEvent.KEYUP and event.data[0] == pyglfw.api.GLFW_KEY_W:
             self.ctx.wireframe = not self.ctx.wireframe
 
+        # Toggle normal display
         if event.type == CEvent.KEYUP and event.data[0] == pyglfw.api.GLFW_KEY_N:
             self.show_normals = not self.show_normals
 

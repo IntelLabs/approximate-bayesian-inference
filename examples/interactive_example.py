@@ -80,6 +80,10 @@ def interactive_example():
     floor_node = CNode(geometry=make_mesh(scene, FLOOR_MESH, scale=1.0),
                        transform=CTransform(tf.compose_matrix(translate=[0, 0, -0.65])))
     scene.insert_graph([floor_node])
+
+    # Example reference frame size 1.0
+    nodes1 = CNode(geometry=make_mesh(scene, REFERENCE_FRAME_MESH, scale=0.1))
+    scene.insert_graph([nodes1])
     ###################################################################################################################
 
     ###################################################################################################################
@@ -159,6 +163,7 @@ def interactive_example():
     lines_display.line_width = 5
     lines_display.is_transparent = True
     lines_display_node = CNode(geometry=lines_display)
+    lines_data = np.array([], dtype=np.float32)
     scene.insert_graph([lines_display_node])
     ###################################################################################################################
 
@@ -214,7 +219,10 @@ def interactive_example():
         mouse_y = int(scene.wm.get_mouse_pos()[1])
         if depth_image is not None:
             if 0 < mouse_x < depth_image.width and 0 < mouse_y < depth_image.height:
-                scene.draw_text("Depth (%d, %d): %.3f" % (mouse_x, mouse_y, depth_image.transpose(Image.FLIP_TOP_BOTTOM).getpixel((mouse_x, mouse_y))), (20, 60), scale=1)
+                point = scene.get_3d_point(mouse_x, mouse_y).reshape(-1)
+                cursor_info = "Pixel(%03d %03d). Depth: %5.3f. 3D Cam: %5.3f %5.3f %5.3f" % \
+                              (mouse_x, mouse_y, depth_image.transpose(Image.FLIP_TOP_BOTTOM).getpixel((mouse_x, mouse_y)), point[0], point[1], point[2])
+                scene.draw_text(cursor_info, (20, 60), scale=0.5)
 
         scene.draw_text(str({k: str(round(v*1000.0, 3))+"ms" if isinstance(v, float) else v for k, v in timings.items()}), (20, 20), scale=0.5)
         timings["text"] = time.time() - tic
