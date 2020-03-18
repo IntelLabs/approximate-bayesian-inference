@@ -246,7 +246,10 @@ class CTransform(object):
         return CTransform(np.matmul(self.t, other.t))
 
     def __repr__(self):
-        return " pos: " + repr(tuple(self.t[0:3, 3])) + " rot: " + repr(tf.euler_from_matrix(self.t))
+        pos = self.t[0:3, 3].flatten()
+        euler = tf.euler_from_matrix(self.t)
+        return " pos:%6.3f %6.3f %6.3f" % (pos[0], pos[1], pos[2]) + \
+               " rot:%6.3f %6.3f %6.3f" % (euler[0], euler[1], euler[2])
 
     def get_position(self):
         return self.t[0:3, 3].reshape(1, 3)
@@ -281,12 +284,12 @@ class CCamera(object):
 
     def __repr__(self):
         res = "Camera"
-        res += "\n |- r: %5.3f" % self.r
-        res += "\n |- alpha: %5.3f" % self.alpha
-        res += "\n |- beta: %5.3f" % self.beta
-        res += "\n |- target: [%5.3f, %5.3f, %5.3f]" % (self.focus_point[0], self.focus_point[1], self.focus_point[2])
-        res += "\n |- up: [%5.3f, %5.3f, %5.3f]" % (self.up_vector[0], self.up_vector[1], self.up_vector[2])
-        res += "\n |- fx, fy, cx, cy: [%5.3f, %5.3f, %5.3f, %5.3f]" % (self.fx, self.fy, self.cx, self.cy)
+        res += "\n |- r:%6.3f" % self.r
+        res += "\n |- alpha:%6.3f" % self.alpha
+        res += "\n |- beta:%6.3f" % self.beta
+        res += "\n |- target: [%6.3f,%6.3f,%6.3f]" % (self.focus_point[0], self.focus_point[1], self.focus_point[2])
+        res += "\n |- up: [%6.3f,%6.3f,%6.3f]" % (self.up_vector[0], self.up_vector[1], self.up_vector[2])
+        res += "\n |- fx, fy, cx, cy: [%6.3f,%6.3f,%6.3f,%6.3f]" % (self.fx, self.fy, self.cx, self.cy)
         res += "\n |- w, h: [%04d, %04d]\n" % (self.width, self.height)
         return res
 
@@ -811,7 +814,6 @@ class CScene(object):
     def get_events(self):
         pyglfw.poll_events()
         events = self.wm.get_events()
-
         return events
 
     def set_window_name(self, name):
@@ -1180,10 +1182,13 @@ class CNode(object):
         for c in self.children:
             res = res + repr(c)
         if self.parent is not None:
-            res = res + "id: %03d, p: %03d," % (self.id, self.parent.id) + repr(self.t) + "\n"
+            res = res + "id: %08d, parent: %08d," % (self.id, self.parent.id) + repr(self.t)
         else:
-            res = res + "id: %03d, p: N/A," % self.id + repr(self.t) + " [ROOT] \n"
-        return res
+            res = res + "id: %08d, parent: N/A," % self.id + repr(self.t) + " [ROOT]"
+
+        if self.geom is not None:
+            res = res + " geom: " + repr(self.geom) + " visible: " + str(self.visible)
+        return res + "\n"
 
 
 class CGeometry(object):
@@ -1208,6 +1213,10 @@ class CGeometry(object):
         self.texture = self.ctx.texture(size=(16, 16), components=4, data=np.zeros((16,16,4), dtype=np.uint8).tobytes())
         self.is_transparent = False
         self.draw_always = False
+
+    def __repr__(self):
+        res = str(self.__class__) + " transp: " + str(self.is_transparent) + " draw_always: " + str(self.draw_always)
+        return res
 
     def set_texture(self, image, build_mipmaps=True):
         self.scene.make_current()

@@ -1,6 +1,6 @@
 numpy
 pywavefront
-moderngl
+moderngl>=5.6.0
 pyopengl
 pygame
 pillow
