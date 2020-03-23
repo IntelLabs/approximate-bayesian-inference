@@ -8,25 +8,14 @@ from PIL import Image, ImageFont
 from PIL import ImageFilter
 import copy
 
-import pygame
 from pyglfw import pyglfw
 from pathlib import Path
 
 '''
-REQUIREMENTS
-
-pip install ModernGL numpy PIL pywavefront
-pip install pyglfw              # Only for glfw window management (recommended)
-pip install pygame              # Only for pygame window management
-pip install pybullet            # Only needed for pybullet integration
-
 TODO:
-- Read render buffer without being cropped
-- Cache the semantic/depth renderer drawing to only draw if necessary
-- Implement the semantic+depth image in a single call
 - Implement the rgb+depth image in a single call. Reuse the RGB to add on top helper gizmos and produce the color render
-- Fix camera motion
 - Shadows
+- Add material class
 - Fix lighting
 - Primitive geometry makers
 - Implement transparency handling by ordering the rendered objects by distance to the camera
@@ -69,25 +58,87 @@ void main()
 geometry_vertex_shader = '''
 #version 330 core
 
-uniform mat4 Mvp;
+uniform mat4 persp_m;
+uniform mat4 view_m;
+uniform mat4 model_m;
+uniform int normal_colors;
 
 in vec3 in_vert;
 in vec3 in_norm;
 in vec3 in_text;
 in vec4 in_color;
 
-out vec3 v_vert;
-out vec3 v_norm;
-out vec3 v_text;
-out vec4 v_color;
+out VS_OUT {
+    vec3 v_vert;
+    vec3 v_norm;
+    vec3 v_text;
+    vec4 v_color;
+} vs_out;
 
 void main() {
-	v_vert = in_vert;
-	v_norm = in_norm;
-	v_text = in_text;
-	v_color = in_color;
-	gl_Position = Mvp * vec4(v_vert, 1.0);
-} 
+//    mat3 normalMatrix = mat3(transpose(inverse(view_m * model_m)));
+    mat3 normalMatrix = mat3(view_m * model_m);
+    vs_out.v_vert = in_vert;
+    vs_out.v_norm = normalize(vec3(persp_m * vec4(normalMatrix * in_norm, 0.0)));
+    vs_out.v_text = in_text;
+    if (normal_colors > 0)
+    {
+        vs_out.v_color = vec4(abs(in_norm), 1);    
+    }
+    else
+    {
+        vs_out.v_color = in_color;    
+    }
+    gl_Position = persp_m * view_m * model_m * vec4(vs_out.v_vert, 1.0);
+}
+'''
+
+geometry_normals_geometry_shader = '''
+#version 330 core
+layout (triangles) in;
+layout (line_strip, max_vertices = 6) out;
+
+uniform float normal_len;
+
+in VS_OUT {
+    vec3 v_vert;
+    vec3 v_norm;
+    vec3 v_text;
+    vec4 v_color;
+} gs_in[];
+
+out VS_OUT {
+    vec3 v_vert;
+    vec3 v_norm;
+    vec3 v_text;
+    vec4 v_color;
+} gs_out;
+
+void GenerateLine(int index)
+{
+    gs_out.v_vert = gs_in[index].v_vert;
+    gl_Position = gl_in[index].gl_Position;
+    gs_out.v_norm = gs_in[index].v_norm;
+    gs_out.v_text = gs_in[index].v_text;
+    gs_out.v_color = gs_in[index].v_color;
+    EmitVertex();
+    
+    float dist = length(gl_Position);
+    gs_out.v_vert = gs_in[index].v_vert + gs_in[index].v_norm * normal_len * dist;
+    gl_Position = gl_in[index].gl_Position + vec4(gs_in[index].v_norm * normal_len * dist, 0.0);
+    gs_out.v_norm = gs_in[index].v_norm;
+    gs_out.v_text = gs_in[index].v_text;
+    gs_out.v_color = gs_in[index].v_color;
+    EmitVertex();
+    EndPrimitive();
+}
+
+void main()
+{
+    GenerateLine(0); // first vertex normal
+    GenerateLine(1); // second vertex normal
+    GenerateLine(2); // third vertex normal
+}
 '''
 
 geometry_fragment_shader = '''
@@ -96,23 +147,25 @@ geometry_fragment_shader = '''
 uniform int normal_colors;
 uniform sampler2D Texture;
 
-in vec3 v_vert;
-in vec3 v_norm;
-in vec3 v_text;
-in vec4 v_color;
+in VS_OUT {
+    vec3 v_vert;
+    vec3 v_norm;
+    vec3 v_text;
+    vec4 v_color;
+} fs_in;
 
 out vec4 f_color;
 
 void main()
 {
-    vec4 color = texture(Texture, v_text.xy);
+    vec4 color = texture(Texture, fs_in.v_text.xy);
     if (normal_colors > 0)
     {
-        f_color = color + v_color + vec4(v_norm.xyz, 0);
+        f_color = fs_in.v_color;
     }
     else
     {
-        f_color = color + v_color;
+        f_color = color + fs_in.v_color;
     }
 }
 '''
@@ -267,6 +320,7 @@ class CTransform(object):
         translation = self.t[0:3, 3]
         matrix = np.hstack((x_vec.reshape(3, 1), y_vec.reshape(3, 1), z_vec.reshape(3, 1), translation.reshape(3, 1)))
         matrix = np.vstack((matrix, np.array([0, 0, 0, 1])))
+        self.t = matrix
         return matrix
 
 
@@ -277,8 +331,9 @@ class CCamera(object):
         self.beta = beta
         self.focus_point = np.array(focus)
         self.up_vector = np.array(up)
+        self.position = None
         self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
-        self.sensitivity = 0.02
+        self.sensitivity = 0.005
         self.focal_px = focal_px
         self.set_intrinsics(width, height, focal_px, focal_px, width / 2, height / 2, 0)
 
@@ -308,34 +363,14 @@ class CCamera(object):
         self.cx = cx
         self.cy = cy
 
-    #TODO: Remove pygame specific keys here
     def process_event(self, event):
         if event.type == CEvent.KEYDOWN:
-            if event.data[0] == pygame.K_w:
-                self.focus_point = self.focus_point + np.array([0, 0, -0.1])
-                self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
-            if event.data[0] == pygame.K_a:
-                self.focus_point = self.focus_point + np.array([-0.1, 0.0, 0.0])
-                self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
-            if event.data[0] == pygame.K_s:
-                self.focus_point = self.focus_point + np.array([0, 0, 0.1])
-                self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
-            if event.data[0] == pygame.K_d:
-                self.focus_point = self.focus_point + np.array([0.1, 0.0, 0.0])
-                self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
-            if event.data[0] == pygame.K_q:
-                self.focus_point = self.focus_point + np.array([0, 0.1, 0.0])
-                self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
-            if event.data[0] == pygame.K_e:
-                self.focus_point = self.focus_point + np.array([0, -0.1, 0.0])
-                self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
-
-            if event.data[0] == pygame.K_v:
+            if event.data[0] == pyglfw.api.GLFW_KEY_V:
                 print("CAMERA PARAMETERS")
                 print("Camera: a:", self.alpha, " b:", self.beta, " r:", self.r)
                 print("Focus point: ", self.focus_point, " Up vector:", self.up_vector)
 
-            if event.data[0] == pygame.K_c:
+            if event.data[0] == pyglfw.api.GLFW_KEY_C:
                 self.alpha = 0.0
                 self.beta = 0.0
                 self.r = 5.0
@@ -347,11 +382,13 @@ class CCamera(object):
         if event.type == CEvent.MOUSEBUTTONDOWN:
             if event.data is None:
                 pass
+            # Scroll down
             elif event.data[1] == 4:
-                self.r = self.r - 0.1
+                self.r = self.r - self.sensitivity*10 if self.r > self.sensitivity*10 else self.sensitivity
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
+            # Scroll up
             elif event.data[1] == 5:
-                self.r = self.r + 0.1
+                self.r = self.r + self.sensitivity*10
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
 
         if event.type == CEvent.MOUSEMOTION:
@@ -361,13 +398,15 @@ class CCamera(object):
                     self.alpha = 0
 
                 self.beta = self.beta + event.data[1][1] * self.sensitivity
-                if self.beta > 2*np.pi or self.beta < -2*np.pi:
-                    self.beta = 0
+                if self.beta > np.pi/1.9:
+                    self.beta = np.pi/1.9
+                elif self.beta < -np.pi/1.9:
+                    self.beta = -np.pi/1.9
 
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
 
             if event.data[2][1] and np.abs(event.data[1][0]) < 50 and np.abs(event.data[1][1]) < 50:
-                self.focus_point = self.focus_point + event.data[1][0] * self.camera_matrix[0, 0:3] * self.sensitivity
+                self.focus_point = self.focus_point - event.data[1][0] * self.camera_matrix[0, 0:3] * self.sensitivity
                 self.focus_point = self.focus_point + event.data[1][1] * self.camera_matrix[1, 0:3] * self.sensitivity
                 self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
 
@@ -387,9 +426,9 @@ class CCamera(object):
             beta = np.pi/2 - 0.01
         elif beta < -np.pi/2:
             beta = -np.pi/2 + 0.01
-        position[0] = self.r * np.cos(alpha) * np.cos(beta)
-        position[1] = self.r * np.sin(alpha) * np.cos(beta)
-        position[2] = self.r * np.sin(beta)
+        position[0] = self.r * np.cos(alpha) * np.cos(beta) + focus[0]
+        position[1] = self.r * np.sin(alpha) * np.cos(beta) + focus[1]
+        position[2] = self.r * np.sin(beta) + focus[2]
 
         # print("Dist: ", np.sqrt(np.matmul(position, position.transpose())))
 
@@ -403,6 +442,7 @@ class CCamera(object):
         y_vec = y_vec / np.linalg.norm(y_vec)
 
         trans = tf.compose_matrix(translate=-position)
+        self.position = position
         rot = np.eye(4)
         rot[0, 0:3] = x_vec
         rot[1, 0:3] = y_vec
@@ -439,127 +479,61 @@ class CEvent(object):
 # WINDOW MANAGER IMPLEMENTATIONS
 ############################################################################################################
 class CWindowManager(object):
-    @staticmethod
-    def init_display():
+    def init_display(self, fullscreen=False, shared=None):
         raise NotImplementedError()
 
-    @staticmethod
-    def set_window_name(name):
+    def set_window_name(self, name):
         raise NotImplementedError()
 
-    @staticmethod
-    def get_events():
+    def get_events(self):
         raise NotImplementedError()
 
-    @staticmethod
-    def set_window_mode(size, options):
+    def set_window_mode(self, size, options):
         raise NotImplementedError()
 
-    @staticmethod
-    def set_mouse_pos(x, y):
+    def set_window_pos(self, pos):
         raise NotImplementedError()
 
-    @staticmethod
-    def get_mouse_pos():
+    def set_mouse_pos(self, x, y):
+        raise NotImplementedError()
+
+    def get_mouse_pos(self):
+        raise NotImplementedError()
+
+    def make_current(self):
         raise NotImplementedError()
 
 
 class COffscreenWindowManager(CWindowManager):
-    @staticmethod
-    def init_display():
+    def init_display(self, fullscreen=False, shared=None):
         pass
 
-    @staticmethod
-    def set_window_name(name):
+    def set_window_name(self, name):
         pass
 
-    @staticmethod
-    def get_events():
+    def get_events(self):
         return []
 
-    @staticmethod
-    def set_window_mode(size, options):
+    def set_window_mode(self, size, options):
         pass
 
-    @staticmethod
-    def set_mouse_pos(x, y):
+    def set_window_pos(self, pos):
         pass
 
-    @staticmethod
-    def get_mouse_pos():
+    def set_mouse_pos(self, x, y):
+        pass
+
+    def get_mouse_pos(self):
         return [0, 0]
 
     def draw(self):
         pass
 
+    def close(self):
+        pass
 
-class CPygameEvent(CEvent):
-    def __init__(self):
-        super(CPygameEvent, self).__init__()
-
-    def initialize(self, event):
-        self.source_obj = event
-        if event.type == pygame.QUIT:
-            self.type = CEvent.QUIT
-        elif event.type == pygame.KEYDOWN:
-            self.type = CEvent.KEYDOWN
-            self.data = (event.key, event.mod, event.unicode)
-        elif event.type == pygame.KEYUP:
-            self.type = CEvent.KEYUP
-            self.data = (event.key, event.mod)
-        elif event.type == pygame.MOUSEMOTION:
-            self.type = CEvent.MOUSEMOTION
-            self.data = (event.pos, event.rel, event.buttons)
-        elif event.type == pygame.MOUSEBUTTONUP:
-            self.type = CEvent.MOUSEBUTTONUP
-            self.data = (event.pos, event.button)
-        elif event.type == pygame.MOUSEBUTTONDOWN:
-            self.type = CEvent.MOUSEBUTTONDOWN
-            self.data = (event.pos, event.button)
-        elif event.type == pygame.VIDEORESIZE:
-            self.type = CEvent.VIDEORESIZE
-            self.data = (event.size, event.w, event.h)
-        elif event.type == pygame.VIDEOEXPOSE:
-            self.type = CEvent.VIDEOEXPOSE
-
-
-class CPygameWindowManager(CWindowManager):
-    @staticmethod
-    def init_display():
-        pygame.init()
-        pygame.font.init()
-
-    @staticmethod
-    def set_window_name(name):
-        pygame.display.set_caption(name)
-
-    @staticmethod
-    def get_events():
-        events = pygame.event.get()
-        event_list = []
-        for ev in events:
-            event = CPygameEvent()
-            event.initialize(ev)
-            event_list.append(event)
-        return event_list
-
-    @staticmethod
-    def draw():
-        pygame.display.flip()
-        pygame.time.wait(1)
-
-    @staticmethod
-    def set_window_mode(size, options):
-        return pygame.display.set_mode(size, options)
-
-    @staticmethod
-    def set_mouse_pos(x, y):
-        pygame.mouse.set_pos(x, y)
-
-    @staticmethod
-    def get_mouse_pos():
-        pos = pygame.mouse.get_pos()
-        return pos
+    def make_current(self):
+        pass
 
 
 class CGLFWWindowManager(CWindowManager):
@@ -692,6 +666,9 @@ class CGLFWWindowManager(CWindowManager):
         self.window.event_queue.clear()
         return res
 
+    def make_current(self):
+        self.window.make_current()
+
     def draw(self):
         self.window.make_current()
         self.window.swap_buffers()
@@ -699,6 +676,10 @@ class CGLFWWindowManager(CWindowManager):
     def set_window_mode(self, size, options=None):
         self.window.make_current()
         self.window.size = size
+
+    def set_window_pos(self, pos):
+        self.window.make_current()
+        self.window.pos = pos
 
     def set_mouse_pos(self, x, y):
         self.window.cursor_pos = (x, y)
@@ -708,7 +689,9 @@ class CGLFWWindowManager(CWindowManager):
         return pos
 
     def close(self):
-        self.window.close()
+        if self.window is not None:
+            self.window.close()
+            self.window = None
         # pyglfw.terminate()
 
 ############################################################################################################
@@ -728,8 +711,10 @@ class CScene(object):
         self.init_display(name, width, height, location=location, options=options, fullscreen=fullscreen, shared=shared_window)
 
         print("ModernGL: ", mgl.__version__)
-        # self.ctx = mgl.create_standalone_context()
-        self.ctx = mgl.create_context()  # Use this when binding to an existing OpenGL context
+        if isinstance(window_manager, COffscreenWindowManager):
+            self.ctx = mgl.create_standalone_context()
+        else:
+            self.ctx = mgl.create_context()
         self.fbo = self.ctx.simple_framebuffer((self.width, self.height))
         self.active_fbo = "rgb"
 
@@ -757,6 +742,7 @@ class CScene(object):
         # aspect = self.width / float(self.height)
         self.near = near
         self.far = far
+        self.show_normals = False
         # self.FoV = 60.0
         # self.perspective = self.compute_perspective_matrix(self.FoV, self.FoV / aspect, near, far)
 
@@ -768,19 +754,32 @@ class CScene(object):
                                                self.near, self.far)
 
         self.perspective = np.matmul(ndc_matrix, proj_matrix)
-        self.perspective = ndc_matrix
+        # self.perspective = ndc_matrix
 
         self.set_font(font_path=None, font_size=48)
 
-        self.segment_program = self.ctx.program(vertex_shader=semantic_vertex_shader, fragment_shader=semantic_fragment_shader)
-        self.geometry_program = self.ctx.program(vertex_shader=geometry_vertex_shader, fragment_shader=geometry_fragment_shader)
+        self.segment_program = self.ctx.program(vertex_shader=semantic_vertex_shader,
+                                                fragment_shader=semantic_fragment_shader)
+
+        self.geometry_program = self.ctx.program(vertex_shader=geometry_vertex_shader,
+                                                 fragment_shader=geometry_fragment_shader)
+
+        self.geometry_normals_program = self.ctx.program(vertex_shader=geometry_vertex_shader,
+                                                         fragment_shader=geometry_fragment_shader,
+                                                         geometry_shader=geometry_normals_geometry_shader)
 
     def __del__(self):
+        # print("CScene::__del__")
+        self.delete_graph(self.root)
+        self.ctx.finish()
         self.wm.close()
-        # self.ctx.finish()
-        self.fbo.release()
-        self.fbo_seg.release()
-        self.ctx.release()
+        if self.fbo is not None:
+            self.fbo.release()
+            self.fbo = None
+        if self.fbo_seg is not None:
+            self.fbo_seg.release()
+            self.fbo_seg = None
+        # self.ctx.release()
 
     #############################################################
     # GENERIC INITIALIZATION METHODS. WRAPPER TO HANDLE MULTIPLE WINDOW MANAGERS (pygame, pyglfw, ...)
@@ -792,7 +791,7 @@ class CScene(object):
         self.height = height
         self.wm.set_window_mode((self.width, self.height), options=options)
         self.wm.set_window_name(name)
-        self.wm.window.pos = location
+        self.wm.set_window_pos(location)
 
     def get_window_pos(self):
         return self.wm.window.pos
@@ -803,12 +802,13 @@ class CScene(object):
         self.wm.window.pos = np.array(pos) + np.array(monitor.pos)
 
     def make_current(self):
-        self.wm.window.make_current()
+        self.wm.make_current()
         self.get_active_fbo().use()
 
     def swap_buffers(self):
         self.make_current()
-        self.ctx.copy_framebuffer(self.ctx.screen, self.get_active_fbo())
+        if self.ctx.screen is not None:
+            self.ctx.copy_framebuffer(self.ctx.screen, self.get_active_fbo())
         self.wm.draw()
 
     def get_events(self):
@@ -907,7 +907,7 @@ class CScene(object):
 
     def clear(self, color_rgba=(0.0, 0.2, 0.2, 1.0)):
         self.clear_color = color_rgba
-        self.wm.window.make_current()
+        self.wm.make_current()
         self.ctx.clear(color_rgba[0], color_rgba[1], color_rgba[2], color_rgba[3])
 
     def draw(self, camera=None, use_ortho=False, fbo=None):
@@ -940,8 +940,6 @@ class CScene(object):
             self.root.draw(ortho, camera.camera_matrix, np.eye(4), self.render_mode)
         else:
             self.root.draw(self.perspective, camera.camera_matrix, np.eye(4), self.render_mode)
-
-        # self.ctx.finish()
 
     def set_font(self, font_path=None, font_size=64, font_color=(255, 255, 255, 255), background_color=(0, 0, 0, 0)):
         self.make_current()
@@ -1019,7 +1017,7 @@ class CScene(object):
         self.text_display.is_transparent = True
         self.text_display.draw_always = True
         self.text_display.set_data(verts)
-        self.text_display.draw(None)
+        self.text_display.draw(None, None, None)
 
     def semantic_render(self):
         self.set_active_fbo("seg")
@@ -1039,6 +1037,7 @@ class CScene(object):
                 visibility[i] = n.visible
                 n.set_is_visible(True)
                 n.geom.prog = self.segment_program
+                n.geom.norm_prog = None
                 n.geom.update_shader()
             else:
                 visibility[i] = n.visible
@@ -1056,10 +1055,22 @@ class CScene(object):
             n.set_is_visible(visibility[i])
             if n.geom is not None and programs[i] is not None and not isinstance(n.geom, CImage):
                 n.geom.prog = programs[i]
+                n.geom.norm_prog = self.geometry_normals_program
                 n.geom.update_shader()
 
-    def get_depth_image(self):
-        self.semantic_render()
+    def get_depth_px(self, px, py, do_render=True):
+        if do_render:
+            self.semantic_render()
+
+        depth_buffer = np.frombuffer(
+            self.fbo_seg.read(components=1, dtype='f4', attachment=-1),
+            dtype=np.dtype('f4')).reshape(self.fbo_seg.width, self.fbo_seg.height) * 2.0 - 1.0
+
+        return depth_buffer[px, py]
+
+    def get_depth_image(self, do_render=True):
+        if do_render:
+            self.semantic_render()
 
         depth_buffer = np.frombuffer(
             self.fbo_seg.read(components=1, dtype='f4', attachment=-1),
@@ -1099,6 +1110,31 @@ class CScene(object):
 
         return img_depth, img_sem
 
+    def get_3d_point(self, px, py):
+        # Get depth at the sampled point
+        pz = self.get_depth_image(do_render=True).transpose(Image.FLIP_TOP_BOTTOM).getpixel((px, py))
+
+        # Get the ray through the desired target pixel
+        ray_pixel = np.array([(px - self.camera.cx) / self.camera.fx,
+                              (py - self.camera.cy) / self.camera.fy,
+                              1])
+
+        # Compute the point in camera frame (x:right, y:down, z:forward) by using the measured depth at the pixel
+        point_cam = ray_pixel * pz
+
+        # Add the homogeneous coordinate
+        point_cam = np.concatenate((point_cam, np.array([1])))
+
+        # Get the camera coordinates in the world frame with the inverse camera transform and a roation due to
+        # OpenGl camera having the z axis pointing outside the screen.
+        tf = CTransform(np.linalg.inv(self.camera.camera_matrix)) @ \
+             CTransform(np.array([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]]))
+
+        # tf.look_at(self.camera.focus_point, self.camera.up_vector)
+        point_world = tf.t @ point_cam
+
+        return point_world
+
     def process_event(self, event):
         self.make_current()
 
@@ -1116,10 +1152,12 @@ class CScene(object):
             if event.data[0][1] < cursor_margin:
                 self.wm.set_mouse_pos(event.data[0][0], self.height - cursor_margin)
 
+        # Close program
         if event.type == CEvent.KEYDOWN:
             if event.type == CEvent.QUIT:
                 quit()
 
+        # Resize framebuffers
         if event.type == CEvent.VIDEORESIZE:
             self.set_window_mode((event.data[1], event.data[2]), options=self.options)
             self.width = event.data[1]
@@ -1127,6 +1165,19 @@ class CScene(object):
             self.wm.viewport = (0, 0, self.width, self.height)
             self.camera.set_resolution(self.width, self.height)
             print("Window resize (w:%d, h:%d)" % (event.data[1], event.data[2]), event.data[0])
+
+        # Camera focus point
+        if event.type == CEvent.KEYUP and event.data[0] == pyglfw.api.GLFW_KEY_F:
+            self.camera.focus_point = self.get_3d_point(self.wm.get_mouse_pos()[0], self.wm.get_mouse_pos()[1])[0:3]
+            self.camera.update()
+
+        # Toggle wireframe
+        if event.type == CEvent.KEYUP and event.data[0] == pyglfw.api.GLFW_KEY_W:
+            self.ctx.wireframe = not self.ctx.wireframe
+
+        # Toggle normal display
+        if event.type == CEvent.KEYUP and event.data[0] == pyglfw.api.GLFW_KEY_N:
+            self.show_normals = not self.show_normals
 
     def __repr__(self):
         res = "=====\n"
@@ -1171,9 +1222,8 @@ class CNode(object):
 
     def draw(self, perspective, view, model, mode):
         model = np.matmul(model, self.t.t)
-        mvp = np.matmul(perspective, np.matmul(view, model))
         if self.geom is not None and self.visible:
-            self.geom.draw(mvp, mode, id=self.id)
+            self.geom.draw(perspective, view, model, mode, id=self.id)
         for c in self.children:
             c.draw(perspective, view, model, mode)
 
@@ -1199,6 +1249,7 @@ class CGeometry(object):
         self.data = []
         self.vbo = None
         self.vao = None
+        self.vaon = None
         self.ibo = None
         if vshader is not None:
             self.vertex_shader = open(vshader).read()
@@ -1209,6 +1260,7 @@ class CGeometry(object):
         else:
             self.fragment_shader = default_fragment_shader
         self.prog = self.ctx.program(vertex_shader=self.vertex_shader, fragment_shader=self.fragment_shader)
+        self.norm_prog = self.ctx.program(vertex_shader=self.vertex_shader, fragment_shader=self.fragment_shader, geometry_shader=geometry_normals_geometry_shader)
         self.draw_mode = None
         self.texture = self.ctx.texture(size=(16, 16), components=4, data=np.zeros((16,16,4), dtype=np.uint8).tobytes())
         self.is_transparent = False
@@ -1252,10 +1304,17 @@ class CGeometry(object):
         if self.vao is not None:
             self.vao.release()
             self.vao = None
+        if self.vaon is not None:
+            self.vaon.release()
+            self.vaon = None
         if self.ibo is not None:
             self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 3f 3f 4f', 'in_vert', 'in_norm', 'in_text', 'in_color')], index_buffer=self.ibo)
+            if self.norm_prog is not None:
+                self.vaon = self.ctx.vertex_array(self.norm_prog, [(self.vbo, '3f 3f 3f 4f', 'in_vert', 'in_norm', 'in_text', 'in_color')], index_buffer=self.ibo)
         else:
             self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 3f 3f 4f', 'in_vert', 'in_norm', 'in_text', 'in_color')])
+            if self.norm_prog is not None:
+                self.vaon = self.ctx.vertex_array(self.norm_prog, [(self.vbo, '3f 3f 3f 4f', 'in_vert', 'in_norm', 'in_text', 'in_color')])
 
     def set_data(self, data, indices=None):
         self.scene.make_current()
@@ -1267,9 +1326,6 @@ class CGeometry(object):
         if self.vbo is not None:
             self.vbo.release()
             self.vbo = None
-        if self.vao is not None:
-            self.vao.release()
-            self.vao = None
         self.vbo = self.ctx.buffer(data)
         if self.ibo is not None:
             self.ibo.release()
@@ -1278,32 +1334,48 @@ class CGeometry(object):
             self.ibo = self.ctx.buffer(indices)
         self.update_shader()
 
-    def draw(self, mvp, mode=mgl.TRIANGLE_STRIP, id=0):
+    def set_uniforms(self, prog, perspective, view, model, id, tex_id):
+        if 'Light' in prog:
+            prog['Light'].value = self.scene.light
+
+        if 'Mvp' in prog:
+            mvp = np.matmul(perspective, np.matmul(view, model))
+            prog['Mvp'].value = tuple(np.array(mvp, np.float32).reshape(-1, order='F'))
+
+        if 'persp_m' in prog:
+            prog['persp_m'].value = tuple(np.array(perspective, np.float32).reshape(-1, order='F'))
+
+        if 'view_m' in prog:
+            prog['view_m'].value = tuple(np.array(view, np.float32).reshape(-1, order='F'))
+
+        if 'model_m' in prog:
+            prog['model_m'].value = tuple(np.array(model, np.float32).reshape(-1, order='F'))
+
+        if 'Texture' in prog:
+            prog['Texture'].value = tex_id
+
+        if 'id' in prog:
+            prog['id'].value = id & 0xffffffff
+
+    def draw(self, perspective, view, model, mode=mgl.TRIANGLE_STRIP, id=0):
         self.scene.make_current()
         if self.data is None or len(self.data) == 0:
             return
 
-        # TODO: Extract lights outside
-        if 'Light' in self.prog:
-            self.prog['Light'].value = (1.0, 1.0, 3.0)
-
-        if 'Mvp' in self.prog:
-            self.prog['Mvp'].value = tuple(np.array(mvp, np.float32).reshape(-1, order='F'))
-
         tex_id = np.array(0, np.uint16)
-        if 'Texture' in self.prog:
-            self.prog['Texture'].value = tex_id
-        if self.texture is not None:
-            self.texture.use(tex_id)
-
-        if 'id' in self.prog:
-            self.prog['id'].value = id & 0xffffffff
-
-        if 'normal_colors' in self.prog:
-            self.prog['normal_colors'].value = 0
+        self.set_uniforms(self.prog, perspective, view, model, id, tex_id)
+        if self.norm_prog is not None:
+            self.set_uniforms(self.norm_prog, perspective, view, model, id, tex_id)
+            if 'normal_len' in self.norm_prog:
+                self.norm_prog['normal_len'].value = 0.03
+            if 'normal_colors' in self.norm_prog:
+                self.norm_prog['normal_colors'].value = int(self.scene.show_normals)
 
         if self.draw_mode is not None:
             mode = self.draw_mode
+
+        if self.texture is not None:
+            self.texture.use(tex_id)
 
         if self.draw_always:
             self.ctx.disable(mgl.DEPTH_TEST)
@@ -1313,9 +1385,15 @@ class CGeometry(object):
             self.ctx.enable(mgl.BLEND)
             self.ctx.blend_func = (mgl.SRC_ALPHA, mgl.ONE_MINUS_SRC_ALPHA)
             self.vao.render(mode)
+            if self.scene.show_normals and self.vaon is not None:
+                self.ctx.enable(mgl.DEPTH_TEST)
+                self.vaon.render(mode)
         else:
             self.ctx.disable(mgl.BLEND)
             self.vao.render(mode)
+            if self.scene.show_normals and self.vaon is not None:
+                self.ctx.enable(mgl.DEPTH_TEST)
+                self.vaon.render(mode)
 
     def __del__(self):
         del self.data
@@ -1328,6 +1406,10 @@ class CGeometry(object):
         if self.ibo is not None:
             self.ibo.release()
             self.ibo = None
+        if self.texture is not None:
+            self.texture.release()
+            self.texture = None
+
         # TODO: This needs fixing to release the shader if it is a local shader
         # if self.prog is not None:
         #     self.prog.release()
@@ -1375,14 +1457,14 @@ class CPointCloud(object):
             self.vbo = self.ctx.buffer(data)
             self.update_shader()
 
-    def draw(self, mvp, mode=mgl.POINTS, id=0):
+    def draw(self, perspective, view, model, mode=mgl.POINTS, id=0):
         self.scene.make_current()
         if self.data is None or len(self.data) == 0:
             return
 
         self.ctx.disable(mgl.BLEND)
         self.ctx.enable(mgl.DEPTH_TEST)
-
+        mvp = np.matmul(perspective, np.matmul(view, model))
         self.prog['Mvp'].value = tuple(np.array(mvp, np.float32).reshape(-1, order='F'))
         if self.draw_mode is not None:
             mode = self.draw_mode
@@ -1473,12 +1555,12 @@ class CFloatingText(CGeometry):
             ch_pos += 1
         self.set_data(verts)
 
-    def draw(self, mvp, mode=mgl.TRIANGLES, id=0):
+    def draw(self, perspective, view, model, mode=mgl.TRIANGLES, id=0):
         if self.camera_facing:
             # Compute camera facing rotation matrix
             pass
 
-        super().draw(mvp, mode, id)
+        super().draw(perspective, view, model, mode, id)
 
 
 class CImage(CGeometry):
@@ -1487,6 +1569,7 @@ class CImage(CGeometry):
         self.vertex_shader = image_vertex_shader
         self.fragment_shader = image_fragment_shader
         self.prog = self.ctx.program(vertex_shader=self.vertex_shader, fragment_shader=self.fragment_shader)
+        self.norm_prog = None
         self.draw_mode = mgl.TRIANGLES
         self.texture = None
         self.offset = (0.0, 0.0)
@@ -1522,8 +1605,8 @@ class CImage(CGeometry):
     def set_texture(self, image, build_mipmaps=False):
         super().set_texture(image, build_mipmaps)
 
-    def draw(self, mvp, mode=mgl.TRIANGLES, id=0):
-        super().draw(mvp, mode, id)
+    def draw(self, perspective, view, model, mode=mgl.TRIANGLES, id=0):
+        super().draw(perspective, view, model, mode, id)
 
     def update_shader(self):
         self.scene.make_current()
@@ -1573,10 +1656,10 @@ class CLines(CGeometry):
         self.vbo = self.ctx.buffer(self.data)
         self.update_shader()
 
-    def draw(self, mvp, mode=mgl.LINES, id=0):
+    def draw(self, perspective, view, model, mode=mgl.LINES, id=0):
         self.scene.make_current()
         self.ctx.line_width = self.line_width
-        super().draw(mvp, mode, id)
+        super().draw(perspective, view, model, mode, id)
 
 
 class CPlot(CGeometry):
@@ -1786,7 +1869,7 @@ class CPlot(CGeometry):
             self.vao = None
         self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
 
-    def draw(self, mvp, mode=mgl.LINES, id=0):
+    def draw(self, perspective, view, model, mode=mgl.LINES, id=0):
         self.scene.make_current()
         self.ctx.line_width = self.line_width
 
@@ -1794,7 +1877,7 @@ class CPlot(CGeometry):
         if len(self.data) > 0:
             self.vbo = self.ctx.buffer(self.data)
             self.update_shader()
-            super().draw(mvp, mode, id)
+            super().draw(perspective, view, model, mode, id)
 
     # This version is just with points (for GL_LINES)
     @staticmethod
@@ -2014,7 +2097,7 @@ class CBarPlot(CPlot):
             print("ERROR: CLinePlot range of values is 0 for X or Y axis.")
             return data
 
-    def draw(self, mvp, mode=mgl.LINES, id=0):
+    def draw(self, perspective, view, model, mode=mgl.LINES, id=0):
         self.scene.make_current()
         # Draw first lines
         self.draw_mode = mgl.LINES
@@ -2023,11 +2106,11 @@ class CBarPlot(CPlot):
         if len(self.data) > 0:
             self.vbo = self.ctx.buffer(self.data)
             self.update_shader()
-            CGeometry.draw(self, mvp, mode, id)
+            CGeometry.draw(self, perspective, view, model, mode, id)
 
         # Draw second triangles
         self.draw_mode = mgl.TRIANGLES
         if len(self.verts_data) > 0:
             self.vbo = self.ctx.buffer(self.verts_data)
             self.update_shader()
-            CGeometry.draw(self, mvp, mode, id)
+            CGeometry.draw(self, perspective, view, model, mode, id)

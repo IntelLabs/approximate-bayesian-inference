@@ -1,9 +1,9 @@
 #!/usr/bin/python3
 import time
-
 from PIL import Image
 import numpy as np
 import transformations as tf
+
 from pyViewer.viewer import CScene, CNode, CTransform, COffscreenWindowManager, CGLFWWindowManager
 from pyViewer.geometry_makers import make_mesh
 
@@ -14,8 +14,12 @@ except ModuleNotFoundError:
     matplotlib_enabled = False
 
 
-def get_occlusion_percent(img_full, img_ind, i, save_images=False):
+def get_visibility_percent(img_full, img_ind, i, save_images=False):
     index = np.max(img_ind)
+    # handle the case when the target object is not visible in the frame
+    if index == 0:
+        return 0.0
+
     total = np.sum(img_ind == index)
     partial = np.sum(img_full == index)
 
@@ -59,7 +63,7 @@ def semantic_render_with_occlusion(scene, camera_positions=[(0.7, 0.7, 2)], widt
     for j, img_full in enumerate(full_images):  # For each full image
         occlusion_per_object = []
         for i in range(len(individual_object_images[j])):    # Compute occlusion for each individual object
-            occ = get_occlusion_percent(img_full.view(np.uint32), individual_object_images[j][i].view(np.uint32), j, save_images=True)
+            occ = get_visibility_percent(img_full.view(np.uint32), individual_object_images[j][i].view(np.uint32), j, save_images=False)
             occlusion_per_object.append(occ)
         occlusions.append(occlusion_per_object)
 
@@ -116,7 +120,7 @@ def semantic_render(scene, camera_positions=[(0.7, 0.7, 2)], width=100, height=1
         viz.swap_buffers()
 
         if show:
-            time.sleep(0.033)
+            time.sleep(0.1)
 
         # Check that the image is properly generated
         if np.sum(np.array(seg_images[i])) == 0:
@@ -127,7 +131,7 @@ def semantic_render(scene, camera_positions=[(0.7, 0.7, 2)], width=100, height=1
             # retries += 1
         i = i + 1
 
-    del viz
+    viz.__del__()
     return seg_images
 
 
@@ -175,8 +179,10 @@ def depth_render(scene, camera_positions=[(0.7, 0.7, 2)], width=100, height=100,
         viz.draw()
         viz.swap_buffers()
         depth_images[i] = viz.get_depth_image()
+        if show:
+            time.sleep(0.1)
 
-    del viz
+    viz.__del__()
     return depth_images
 
 
@@ -187,15 +193,13 @@ if __name__ == "__main__":
     # Define the scene to be rendered with a list of meshes, positions and orientations
     scene = dict()
     scene["meshes"] = ["../models/intel_cup/intel_cup.obj",
-                       "../models/duck/duck_vhacd.obj",
-                       "../models/intel_cup/intel_cup.obj"]
+                       "../models/duck/duck.obj",
+                       "../models/ball/red_ball.obj",
+                       "../models/duck/duck.obj"]
 
-    # "../models/duck/duck_vhacd.obj"
-
-    scene["translations"] = [(0, 0, 0), (-0.05, 0.2, 0.05), (0, 0.1, 0)]
-    scene["rotations"] = [(0, 0, 0), (-1.57, 0, 0), (0, 0, 0)]
-    # scene["ids"] = [np.random.randint(0, 2**24-1) & 0xffffffff for _ in range(3)]
-    scene["ids"] = [i+50 for i in range(3)]
+    scene["translations"] = [(0, 0, 0), (-0.05, 0.2, 0.05), (0, -0.2, 0), (0, 0, 0.2)]
+    scene["rotations"] = [(0, 0, 0), (-1.57, 0, 0), (0, 0, 0), (0, 0, 0)]
+    scene["ids"] = [np.random.randint(0, 2**24-1) & 0xffffffff for _ in range(4)]
 
     max_dist = 1.5
 
@@ -211,7 +215,7 @@ if __name__ == "__main__":
 
     # Generate depth images for the defined scene, camera positions, camera parameters and resolution
     t_ini = time.time()
-    images_depth = depth_render(scene, cameras, height=600, width=800, show=True, camera_K=K)
+    images_depth = depth_render(scene, cameras, height=600, width=800, show=False, camera_K=K)
     t_elapsed = time.time() - t_ini
     print("Generated %d depth images in %3.3fs | %3.3ffps" % (len(cameras), t_elapsed, len(cameras)/t_elapsed))
 
@@ -226,7 +230,7 @@ if __name__ == "__main__":
         pil_image.save("depth_images/depth_%d.png" % i, "PNG")
 
     t_ini = time.time()
-    images_sem, occlusions = semantic_render_with_occlusion(scene, cameras, height=600, width=800, show=True, camera_K=K)
+    images_sem, occlusions = semantic_render_with_occlusion(scene, cameras, height=600, width=800, show=False, camera_K=K)
     t_elapsed = time.time() - t_ini
     print("Generated %d semantic images in %3.3fs | %3.3ffps" % (len(cameras), t_elapsed, len(cameras)/t_elapsed))
 
@@ -238,5 +242,5 @@ if __name__ == "__main__":
 
     for i,occ in enumerate(occlusions):
         print("Frame %d. Occlusions:" % i)
-        for o, id in zip(occ, scene["ids"]):
-            print("ID: %d. Occlusion: %f" % (id, 1-o))
+        for o, id, mesh in zip(occ, scene["ids"], scene["meshes"]):
+            print("ID: %08d. Occlusion: %5.3f Mesh: %s" % (id, 1-o, mesh.split("/")[-1]))

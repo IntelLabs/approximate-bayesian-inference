@@ -49,7 +49,7 @@ def pybullet_example():
     scene = CScene(name='Intel Labs::SSR::VU Depth Renderer. javier.felip.leon@intel.com', width=800, height=600, window_manager=CGLFWWindowManager())
 
     # Example reference frame size 1.0
-    nodes1 = CNode(geometry=make_mesh(scene, REFERENCE_FRAME_MESH, scale=1.0))
+    nodes1 = CNode(geometry=make_mesh(scene, REFERENCE_FRAME_MESH, scale=0.1))
     scene.insert_graph([nodes1])
 
     # Example floor
@@ -58,7 +58,7 @@ def pybullet_example():
     scene.insert_graph([floor_node])
 
     # Load pybullet geometry
-    pybullet_nodes = make_pybullet_scene(scene, physicsClientId=sim_id)
+    pybullet_nodes = make_pybullet_scene(scene, physicsClientId=sim_id, add_ref_frame=True)
     scene.insert_graph(pybullet_nodes)
 
     # Example image node
@@ -103,7 +103,7 @@ def pybullet_example():
             if 0 < mouse_x < depth_image.width and 0 < mouse_y < depth_image.height:
                 scene.draw_text("Depth (%d, %d): %.3f" % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))), (20, 60))
                 print(" Depth (%d, %d): %.3f " % (mouse_x, mouse_y, depth_image.getpixel((mouse_x, mouse_y))))
-        scene.draw_text(repr(timings), (20, 20))
+        scene.draw_text(str({k: str(round(v * 1000.0, 3)) + "ms" if isinstance(v, float) else v for k, v in timings.items()}), (20, 20))
         timings["text"] = time.time() - tic
 
         tic = time.time()

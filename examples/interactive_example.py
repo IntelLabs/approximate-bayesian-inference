@@ -2,7 +2,6 @@
 import time
 import numpy as np
 import transformations as tf
-import pygame
 from PIL import Image
 
 try:
@@ -20,13 +19,11 @@ def interactive_example():
     ###################################################################################################################
     # Example create empty scenes with windows
     scene = CScene(name='Intel Labs::SSR::VU Depth Renderer. javier.felip.leon@intel.com',
-                   width=640, height=480,
-                   window_manager=CGLFWWindowManager(), options=pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE)
+                   width=640, height=480, window_manager=CGLFWWindowManager())
     scene.set_window_pos((0, 0))
     # Example create a secondary scene
-    scene2 = CScene(name='Depth Renderer. Second window.',
-                    width=640, height=480,
-                    window_manager=CGLFWWindowManager(), options=pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE)
+    scene2 = CScene(name='Depth Renderer. Second window example',
+                    width=640, height=480, window_manager=CGLFWWindowManager())
     scene2.set_window_pos((700, 0))
     # Optional: Set fon face and sizes
     scene.set_font(font_size=64, font_color=(255, 255, 255, 255), background_color=(0, 0, 0, 0))
@@ -83,6 +80,10 @@ def interactive_example():
     floor_node = CNode(geometry=make_mesh(scene, FLOOR_MESH, scale=1.0),
                        transform=CTransform(tf.compose_matrix(translate=[0, 0, -0.65])))
     scene.insert_graph([floor_node])
+
+    # Example reference frame size 1.0
+    nodes1 = CNode(geometry=make_mesh(scene, REFERENCE_FRAME_MESH, scale=0.1))
+    scene.insert_graph([nodes1])
     ###################################################################################################################
 
     ###################################################################################################################
@@ -162,6 +163,7 @@ def interactive_example():
     lines_display.line_width = 5
     lines_display.is_transparent = True
     lines_display_node = CNode(geometry=lines_display)
+    lines_data = np.array([], dtype=np.float32)
     scene.insert_graph([lines_display_node])
     ###################################################################################################################
 
@@ -217,7 +219,10 @@ def interactive_example():
         mouse_y = int(scene.wm.get_mouse_pos()[1])
         if depth_image is not None:
             if 0 < mouse_x < depth_image.width and 0 < mouse_y < depth_image.height:
-                scene.draw_text("Depth (%d, %d): %.3f" % (mouse_x, mouse_y, depth_image.transpose(Image.FLIP_TOP_BOTTOM).getpixel((mouse_x, mouse_y))), (20, 60), scale=1)
+                point = scene.get_3d_point(mouse_x, mouse_y).reshape(-1)
+                cursor_info = "Pixel(%03d %03d). Depth: %5.3f. 3D Cam: %5.3f %5.3f %5.3f" % \
+                              (mouse_x, mouse_y, depth_image.transpose(Image.FLIP_TOP_BOTTOM).getpixel((mouse_x, mouse_y)), point[0], point[1], point[2])
+                scene.draw_text(cursor_info, (20, 60), scale=0.5)
 
         scene.draw_text(str({k: str(round(v*1000.0, 3))+"ms" if isinstance(v, float) else v for k, v in timings.items()}), (20, 20), scale=0.5)
         timings["text"] = time.time() - tic
