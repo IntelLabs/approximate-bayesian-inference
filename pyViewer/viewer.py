@@ -1019,7 +1019,7 @@ class CScene(object):
         self.text_display.set_data(verts)
         self.text_display.draw(None, None, None)
 
-    def semantic_render(self):
+    def semantic_render(self, camera=None):
         self.set_active_fbo("seg")
         self.make_current()
 
@@ -1046,7 +1046,7 @@ class CScene(object):
 
         # Render the semantic image
         self.clear((0, 0, 0, 0))  # Clear previous data
-        self.draw(fbo="seg")      # Draw semantic image
+        self.draw(fbo="seg", camera=camera)      # Draw semantic image
         # self.ctx.finish()         # Wait untill all draw calls have been executed
 
         # Restore visibility to the previous state
@@ -1069,9 +1069,9 @@ class CScene(object):
 
         return depth_buffer[px, py]
 
-    def get_depth_image(self, do_render=True):
+    def get_depth_image(self, do_render=True, camera=None):
         if do_render:
-            self.semantic_render()
+            self.semantic_render(camera=camera)
 
         depth_buffer = np.frombuffer(
             self.fbo_seg.read(components=1, dtype='f4', attachment=-1),
@@ -1092,13 +1092,13 @@ class CScene(object):
         img = Image.frombytes('RGBA', (self.fbo.width, self.fbo.height), self.fbo.read(components=4), 'raw', 'RGBA', 0, -1).transpose(Image.FLIP_TOP_BOTTOM)
         return img
 
-    def get_semantic_image(self):
-        self.semantic_render()
+    def get_semantic_image(self, camera=None):
+        self.semantic_render(camera=camera)
         img = Image.frombytes('RGBA', (self.fbo_seg.width, self.fbo_seg.height), self.fbo_seg.read(components=4), 'raw', 'RGBA', 0, -1).transpose(Image.FLIP_TOP_BOTTOM)
         return img
 
-    def get_depth_and_semantic_image(self):
-        self.semantic_render()
+    def get_depth_and_semantic_image(self, camera=None):
+        self.semantic_render(camera=camera)
         img_sem = Image.frombytes('RGBA', (self.fbo_seg.width, self.fbo_seg.height), self.fbo_seg.read(components=4), 'raw', 'RGBA', 0, -1).transpose(Image.FLIP_TOP_BOTTOM)
 
         depth_buffer = np.frombuffer(
