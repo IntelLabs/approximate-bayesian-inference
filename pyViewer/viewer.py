@@ -325,7 +325,8 @@ class CTransform(object):
 
 
 class CCamera(object):
-    def __init__(self, alpha=0.7, beta=0.7, distance=2.0, focus=(0.0, 0.0, 0.0), up=(0.0, 0.0, 1.0), width=640, height=480, focal_px=620):
+    def __init__(self, alpha=0.7, beta=0.7, distance=2.0, focus=(0.0, 0.0, 0.0), up=(0.0, 0.0, 1.0),
+                 width=640, height=480, focal_px=620, ctx=None):
         self.r = distance
         self.alpha = alpha
         self.beta = beta
@@ -336,6 +337,9 @@ class CCamera(object):
         self.sensitivity = 0.005
         self.focal_px = focal_px
         self.set_intrinsics(width, height, focal_px, focal_px, width / 2, height / 2, 0)
+        if ctx is not None:
+            self.ctx = ctx
+            self.fbo = self.ctx.simple_framebuffer((self.width, self.height))
 
     def __repr__(self):
         res = "Camera"
@@ -715,8 +719,8 @@ class CScene(object):
             self.ctx = mgl.create_standalone_context()
         else:
             self.ctx = mgl.create_context()
-        self.fbo = self.ctx.simple_framebuffer((self.width, self.height))
-        self.active_fbo = "rgb"
+
+        self.fbo_rgb = self.ctx.simple_framebuffer((self.width, self.height))
 
         self.width = width
         self.height = height
@@ -773,9 +777,9 @@ class CScene(object):
         self.delete_graph(self.root)
         self.ctx.finish()
         self.wm.close()
-        if self.fbo is not None:
-            self.fbo.release()
-            self.fbo = None
+        if self.fbo_rgb is not None:
+            self.fbo_rgb.release()
+            self.fbo_rgb = None
         if self.fbo_seg is not None:
             self.fbo_seg.release()
             self.fbo_seg = None
@@ -803,12 +807,11 @@ class CScene(object):
 
     def make_current(self):
         self.wm.make_current()
-        self.get_active_fbo().use()
 
     def swap_buffers(self):
         self.make_current()
         if self.ctx.screen is not None:
-            self.ctx.copy_framebuffer(self.ctx.screen, self.get_active_fbo())
+            self.ctx.copy_framebuffer(self.ctx.screen, self.fbo_rgb)
         self.wm.draw()
 
     def get_events(self):
@@ -824,7 +827,7 @@ class CScene(object):
         self.ctx.screen.viewport = (0, 0, self.width, self.height)
         self.ctx.screen.scissor = None
         self.fbo_seg = self.ctx.simple_framebuffer(size)
-        self.fbo = self.ctx.simple_framebuffer(size)
+        self.fbo_rgb = self.ctx.simple_framebuffer(size)
         return self.wm.set_window_mode(size, options)
 
     @staticmethod
@@ -891,31 +894,19 @@ class CScene(object):
                 del self.nodes[i]
                 break
 
-    def get_active_fbo(self):
-        if self.active_fbo == "rgb":
-            return self.fbo
-        elif self.active_fbo == "seg":
-            return self.fbo_seg
-        else:
-            raise ValueError("Unknown active fbo type. Valid values are 'rgb' or 'seg'")
-
-    def set_active_fbo(self, fbo_type="rgb"):
-        if fbo_type == "rgb" or fbo_type == "seg":
-            self.active_fbo = fbo_type
-        else:
-            raise ValueError("Unknown fbo type. Valid values are 'rgb' or 'seg'")
-
     def clear(self, color_rgba=(0.0, 0.2, 0.2, 1.0)):
         self.clear_color = color_rgba
         self.wm.make_current()
-        self.ctx.clear(color_rgba[0], color_rgba[1], color_rgba[2], color_rgba[3])
+        self.fbo_rgb.clear(color_rgba[0], color_rgba[1], color_rgba[2], color_rgba[3])
+        # self.ctx.clear(color_rgba[0], color_rgba[1], color_rgba[2], color_rgba[3])
 
     def draw(self, camera=None, use_ortho=False, fbo=None):
-        if fbo is not None:
-            self.set_active_fbo(fbo)
-        else:
-            self.set_active_fbo("rgb")
         self.make_current()
+
+        if fbo is None:
+            self.fbo_rgb.use()
+        else:
+            fbo.use()
 
         if camera is None:
             camera = self.camera
@@ -983,8 +974,8 @@ class CScene(object):
         return teximg, uv_coords
 
     def draw_text(self, text, pos, scale=1):
-        self.set_active_fbo("rgb")
-        self.make_current()
+        # self.make_current()
+        self.fbo_rgb.use()
 
         # Get text height and width and transofrm them to NDC
         char_width = self.char_width / self.width
@@ -1019,9 +1010,11 @@ class CScene(object):
         self.text_display.set_data(verts)
         self.text_display.draw(None, None, None)
 
-    def semantic_render(self, camera=None):
-        self.set_active_fbo("seg")
+    def semantic_render(self, camera=None, fbo=None):
         self.make_current()
+
+        if fbo is None:
+            fbo = self.fbo_seg
 
         # Set geometry nodes to visible and all Image, Plot, Line and Text nodes not visible and load semantic shaders
         visibility = [False] * len(self.nodes)
@@ -1045,13 +1038,11 @@ class CScene(object):
                 n.set_is_visible(False)
 
         # Render the semantic image
-        self.clear((0, 0, 0, 0))  # Clear previous data
-        self.draw(fbo="seg", camera=camera)      # Draw semantic image
+        fbo.clear(0, 0, 0, 0)  # Clear previous data
+        self.draw(fbo=fbo, camera=camera)      # Draw semantic image
         # self.ctx.finish()         # Wait untill all draw calls have been executed
 
         # Restore visibility to the previous state
-        self.set_active_fbo("rgb")
-        self.make_current()
         for i, n in enumerate(self.nodes):
             n.set_is_visible(visibility[i])
             if n.geom is not None and programs[i] is not None and not isinstance(n.geom, CImage):
@@ -1079,7 +1070,7 @@ class CScene(object):
 
         # Non-linear inverse depth transformation
         depth_buffer = (2.0 * self.near * self.far) / (self.far + self.near - depth_buffer * (self.far - self.near))
-        img = Image.frombuffer('F', (self.fbo.width, self.fbo.height), depth_buffer, 'raw', 'F', 0, -1).transpose(Image.FLIP_TOP_BOTTOM)
+        img = Image.frombuffer('F', (self.fbo_seg.width, self.fbo_seg.height), depth_buffer, 'raw', 'F', 0, -1).transpose(Image.FLIP_TOP_BOTTOM)
         return img
 
     def get_depth_colormap(self, depth_image, colormap_f):
@@ -1087,9 +1078,14 @@ class CScene(object):
         texture_image = Image.frombytes("RGBA", depth_image.size, image_cm)
         return texture_image
 
+    def get_fbo_image(self, fbo):
+        self.make_current()
+        img = Image.frombytes('RGBA', (fbo.width, fbo.height), fbo.read(components=4), 'raw', 'RGBA', 0, -1).transpose(Image.FLIP_TOP_BOTTOM)
+        return img
+
     def get_render_image(self):
         self.make_current()
-        img = Image.frombytes('RGBA', (self.fbo.width, self.fbo.height), self.fbo.read(components=4), 'raw', 'RGBA', 0, -1).transpose(Image.FLIP_TOP_BOTTOM)
+        img = Image.frombytes('RGBA', (self.fbo_rgb.width, self.fbo_rgb.height), self.fbo_rgb.read(components=4), 'raw', 'RGBA', 0, -1).transpose(Image.FLIP_TOP_BOTTOM)
         return img
 
     def get_semantic_image(self, camera=None):
@@ -1107,7 +1103,7 @@ class CScene(object):
 
         # Non-linear inverse depth transformation
         depth_buffer = (2.0 * self.near * self.far) / (self.far + self.near - depth_buffer * (self.far - self.near))
-        img_depth = Image.frombuffer('F', (self.fbo.width, self.fbo.height), depth_buffer, 'raw', 'F', 0, -1).transpose(Image.FLIP_TOP_BOTTOM)
+        img_depth = Image.frombuffer('F', (self.fbo_seg.width, self.fbo_seg.height), depth_buffer, 'raw', 'F', 0, -1).transpose(Image.FLIP_TOP_BOTTOM)
 
         return img_depth, img_sem
 
@@ -1359,7 +1355,7 @@ class CGeometry(object):
             prog['id'].value = id & 0xffffffff
 
     def draw(self, perspective, view, model, mode=mgl.TRIANGLE_STRIP, id=0):
-        self.scene.make_current()
+        # self.scene.make_current()
         if self.data is None or len(self.data) == 0:
             return
 
@@ -1658,7 +1654,7 @@ class CLines(CGeometry):
         self.update_shader()
 
     def draw(self, perspective, view, model, mode=mgl.LINES, id=0):
-        self.scene.make_current()
+        # self.scene.make_current()
         self.ctx.line_width = self.line_width
         super().draw(perspective, view, model, mode, id)
 
@@ -1871,7 +1867,7 @@ class CPlot(CGeometry):
         self.vao = self.ctx.vertex_array(self.prog, [(self.vbo, '3f 4f', 'in_vert', 'in_color')])
 
     def draw(self, perspective, view, model, mode=mgl.LINES, id=0):
-        self.scene.make_current()
+        # self.scene.make_current()
         self.ctx.line_width = self.line_width
 
         self.data = np.concatenate((self.verts_markers, self.verts_data, self.verts_frame, self.verts_ticks, self.verts_tick_lines, self.verts_label))
@@ -2099,7 +2095,7 @@ class CBarPlot(CPlot):
             return data
 
     def draw(self, perspective, view, model, mode=mgl.LINES, id=0):
-        self.scene.make_current()
+        # self.scene.make_current()
         # Draw first lines
         self.draw_mode = mgl.LINES
         self.ctx.line_width = self.line_width

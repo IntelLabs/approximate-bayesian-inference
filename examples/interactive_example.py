@@ -10,7 +10,7 @@ try:
 except ModuleNotFoundError:
     matplotlib_enabled = False
 
-from pyViewer.viewer import CScene, CPointCloud, CNode, CTransform, CEvent, CImage, CGLFWWindowManager, CFloatingText, CLinePlot, CBarPlot, CLines
+from pyViewer.viewer import CScene, CPointCloud, CNode, CTransform, CEvent, CImage, CGLFWWindowManager, CFloatingText, CLinePlot, CBarPlot, CLines, CCamera
 from pyViewer.geometry_makers import make_mesh, make_objects
 from pyViewer.models import REFERENCE_FRAME_MESH, FLOOR_MESH
 
@@ -117,6 +117,27 @@ def interactive_example():
     image_rgb_display.set_position((-1, -0.2), (0.4, 0.4))
     imgrgb_node = CNode(geometry=image_rgb_display)
     scene.insert_graph([imgrgb_node])
+
+    # Example image node for simulated camera
+    image_cam_display = CImage(scene)
+    image_cam_display.set_texture("../textures/intel_labs.png")
+    image_cam_display.set_position((-1, -0.6), (0.4, 0.4))
+    imgcam_node = CNode(geometry=image_cam_display)
+    scene.insert_graph([imgcam_node])
+
+    image_segcam_display = CImage(scene)
+    image_segcam_display.set_texture("../textures/intel_labs.png")
+    image_segcam_display.set_position((-1, -1.0), (0.4, 0.4))
+    imgsegcam_node = CNode(geometry=image_segcam_display)
+    scene.insert_graph([imgsegcam_node])
+
+    # Define custom camera. By passing the ctx it will create its own framebuffer that can be used
+    # as the target to render images when calling draw, after draw the rendered image can be retrieved
+    # by calling scene.get_fbo_image() as shown in the example below.
+    custom_camera = CCamera(ctx=scene.ctx)
+    custom_camera.set_intrinsics(width=640, height=480, fx=camera_k[0, 0], fy=camera_k[1, 1],
+                                 cx=camera_k[0, 2], cy=camera_k[1, 2], skew=camera_k[0, 1])
+    custom_camera.r = 1.0
     ###################################################################################################################
 
     ###################################################################################################################
@@ -220,9 +241,10 @@ def interactive_example():
         if depth_image is not None:
             if 0 < mouse_x < depth_image.width and 0 < mouse_y < depth_image.height:
                 point = scene.get_3d_point(mouse_x, mouse_y).reshape(-1)
-                cursor_info = "Pixel(%03d %03d). Depth: %5.3f. 3D Cam: %5.3f %5.3f %5.3f" % \
+                cursor_info = "Pixel(%03d %03d). Depth: %5.3f. Cursor: %5.3f %5.3f %5.3f" % \
                               (mouse_x, mouse_y, depth_image.transpose(Image.FLIP_TOP_BOTTOM).getpixel((mouse_x, mouse_y)), point[0], point[1], point[2])
                 scene.draw_text(cursor_info, (20, 60), scale=0.5)
+                print(cursor_info)
 
         scene.draw_text(str({k: str(round(v*1000.0, 3))+"ms" if isinstance(v, float) else v for k, v in timings.items()}), (20, 20), scale=0.5)
         timings["text"] = time.time() - tic
@@ -240,6 +262,19 @@ def interactive_example():
         tic = time.time()
         rgb_image = scene.get_render_image()
         timings["read_rgb"] = time.time() - tic
+
+        # Get the rgb image from the custom camera
+        tic = time.time()
+        custom_camera.alpha = np.sin(time.time())
+        custom_camera.camera_matrix = custom_camera.look_at()
+        custom_camera.fbo.clear()
+        scene.draw(use_ortho=False, camera=custom_camera, fbo=custom_camera.fbo)
+        cam_image = scene.get_fbo_image(custom_camera.fbo)
+        image_cam_display.set_texture(cam_image)
+        scene.semantic_render(camera=custom_camera, fbo=custom_camera.fbo)
+        cam_seg_image = scene.get_fbo_image(custom_camera.fbo)
+        image_segcam_display.set_texture(cam_seg_image)
+        timings["custom_camera"] = time.time() - tic
 
         # Get the depth and semantic segmentation from the auxiliary render buffer
         tic = time.time()
