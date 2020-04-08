@@ -1033,7 +1033,8 @@ class CScene(object):
                     isinstance(n.geom, CImage) and not \
                     isinstance(n.geom, CPlot) and not \
                     isinstance(n.geom, CLines) and not \
-                    isinstance(n.geom, CFloatingText):
+                    isinstance(n.geom, CFloatingText) and \
+                    n.visible:
                 visibility[i] = n.visible
                 n.set_is_visible(True)
                 n.geom.prog = self.segment_program
