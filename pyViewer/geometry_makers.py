@@ -87,6 +87,54 @@ def extract_vertex_data(mat, out_format="V3F_N3F_T2F_C4F", scale=1.0):
     return vert_data
 
 
+def make_cuboid(ctx, size=(1, 1, 1), color=(1, 1, 1, 1)):
+    """
+    Make a geometry object with the shape of a cuboid, supports per vertex color.
+    :param ctx: moderngl context
+    :param size: size_x, size_y, size_z
+    :param color: A 4 dimensional array with the color for all the vertices. TODO: Add suport to per-vertex color.
+    :return: A CGeometry object with representing the desired cuboid ready to render.
+    """
+    x = size[0] / 2.0
+    y = size[1] / 2.0
+    z = size[2] / 2.0
+    r = color[0]
+    g = color[1]
+    b = color[2]
+    a = color[3]
+
+    geom = CGeometry(ctx)
+    geom.tex_id = None
+
+    # Vertex format is 3f (pos) 3f (normal) 3f (texture) 4f (color)
+    vertices = np.array(
+        [-x, -y, -z, -x, -y, -z, 0, 0, 0, r, g, b, a,  # Lower 4 vertices
+          x, -y, -z,  x, -y, -z, 0, 0, 0, r, g, b, a,
+          x,  y, -z,  x,  y, -z, 0, 0, 0, r, g, b, a,
+         -x,  y, -z, -x,  y, -z, 0, 0, 0, r, g, b, a,
+          x,  y, z,  x,  y, z, 0, 0, 0, r, g, b, a,    # Upper 4 vertices
+          x, -y, z,  x, -y, z, 0, 0, 0, r, g, b, a,
+         -x, -y, z, -x, -y, z, 0, 0, 0, r, g, b, a,
+         -x,  y, z, -x,  y, z, 0, 0, 0, r, g, b, a], dtype=np.float32)
+
+    indices = np.array([0, 1, 2,  # Bottom triangle 1
+                        2, 3, 0,  # Bottom triangle 2
+                        4, 5, 6,  # Top triangle 1
+                        6, 7, 4,  # Top triangle 2
+                        0, 1, 6,
+                        6, 5, 1,
+                        0, 3, 7,
+                        7, 6, 0,
+                        3, 7, 2,
+                        7, 4, 2,
+                        2, 1, 5,
+                        5, 4, 2
+                        ], dtype=np.int32)
+
+    geom.set_data(vertices, indices)
+    return geom
+
+
 def make_mesh(ctx, filename, scale=1.0):
     geom = CGeometry(ctx)
     geom.tex_id = None
