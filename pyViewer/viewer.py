@@ -382,6 +382,7 @@ class CCamera(object):
                 print("CAMERA PARAMETERS")
                 print("Camera: a:", self.alpha, " b:", self.beta, " r:", self.r)
                 print("Focus point: ", self.focus_point, " Up vector:", self.up_vector)
+                print("Matrix: ", self.camera_matrix)
 
             if event.data[0] == pyglfw.api.GLFW_KEY_C:
                 self.alpha = 0.0
