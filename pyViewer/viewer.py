@@ -336,10 +336,11 @@ class CCamera(object):
         self.camera_matrix = self.look_at(self.focus_point, self.up_vector)
         self.sensitivity = 0.005
         self.focal_px = focal_px
+        self.fbo = None
+        self.ctx = ctx
+        self.height = 0
+        self.width = 0
         self.set_intrinsics(width, height, focal_px, focal_px, width / 2, height / 2, 0)
-        if ctx is not None:
-            self.ctx = ctx
-            self.fbo = self.ctx.simple_framebuffer((self.width, self.height))
 
     def __repr__(self):
         res = "Camera"
@@ -359,6 +360,14 @@ class CCamera(object):
         self.set_intrinsics(width, height, self.focal_px, self.focal_px, width / 2, height / 2, self.s)
 
     def set_intrinsics(self, width, height, fx, fy, cx, cy, skew):
+        # Check if the internal renderbuffer needs to be resized
+        if self.ctx is not None:
+            if self.height != height or self.width != width:
+                if self.fbo is not None:
+                    self.fbo.release()
+                    self.fbo = None
+                self.fbo = self.ctx.simple_framebuffer((width, height))
+
         self.s = skew
         self.height = height
         self.width = width
@@ -1064,14 +1073,16 @@ class CScene(object):
         if do_render:
             self.semantic_render(camera=camera)
 
-        depth_buffer = np.frombuffer(
-            self.fbo_seg.read(components=1, dtype='f4', attachment=-1),
-            dtype=np.dtype('f4')).reshape(self.fbo_seg.width, self.fbo_seg.height) * 2.0 - 1.0
-
-        # Non-linear inverse depth transformation
-        depth_buffer = (2.0 * self.near * self.far) / (self.far + self.near - depth_buffer * (self.far - self.near))
-        img = Image.frombuffer('F', (self.fbo_seg.width, self.fbo_seg.height), depth_buffer, 'raw', 'F', 0, -1).transpose(Image.FLIP_TOP_BOTTOM)
-        return img
+        return self.get_fbo_depth_image(self.fbo_seg)
+        #
+        # depth_buffer = np.frombuffer(
+        #     self.fbo_seg.read(components=1, dtype='f4', attachment=-1),
+        #     dtype=np.dtype('f4')).reshape(self.fbo_seg.width, self.fbo_seg.height) * 2.0 - 1.0
+        #
+        # # Non-linear inverse depth transformation
+        # depth_buffer = (2.0 * self.near * self.far) / (self.far + self.near - depth_buffer * (self.far - self.near))
+        # img = Image.frombuffer('F', (self.fbo_seg.width, self.fbo_seg.height), depth_buffer, 'raw', 'F', 0, -1).transpose(Image.FLIP_TOP_BOTTOM)
+        # return img
 
     def get_depth_colormap(self, depth_image, colormap_f):
         image_cm = np.uint8(colormap_f(np.array(depth_image) / self.far) * 255.0)
@@ -1081,6 +1092,17 @@ class CScene(object):
     def get_fbo_image(self, fbo):
         self.make_current()
         img = Image.frombytes('RGBA', (fbo.width, fbo.height), fbo.read(components=4), 'raw', 'RGBA', 0, -1).transpose(Image.FLIP_TOP_BOTTOM)
+        return img
+
+    def get_fbo_depth_image(self, fbo):
+        self.make_current()
+        depth_buffer = np.frombuffer(
+            fbo.read(components=1, dtype='f4', attachment=-1),
+            dtype=np.dtype('f4')).reshape(fbo.width, fbo.height) * 2.0 - 1.0
+
+        # Non-linear inverse depth transformation
+        depth_buffer = (2.0 * self.near * self.far) / (self.far + self.near - depth_buffer * (self.far - self.near))
+        img = Image.frombuffer('F', (fbo.width, fbo.height), depth_buffer, 'raw', 'F', 0, -1).transpose(Image.FLIP_TOP_BOTTOM)
         return img
 
     def get_render_image(self):
