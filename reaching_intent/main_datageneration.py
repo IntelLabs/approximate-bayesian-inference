@@ -31,7 +31,7 @@ if len(sys.argv) > 1:
 ###################################
 # APPLICATION SPECIFIC PARAMETERS (add/remove/edit parameters to fit your implementation)
 ###################################
-sim_viz = True      # Visualize the generation process
+sim_viz = False      # Visualize the generation process
 sample_rate = 30    # Samples per second
 
 # Generative model parameter limits: start volume (x,y,z), end volume (x,y,z), controller(Kp,Ki,Kd,Krep,iClamp)
