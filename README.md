@@ -1,11 +1,30 @@
+Approximate Bayesian Inference Framework
+========================================
+
+The aim of this repository is to help developers to use analysis-by-synthesis for their specific use cases. The 
+required tasks are to implement the required interfaces for custom generative models, likelihood functions and 
+define the different spaces (state, latent, analysis, observation) that are used in the application. 
+
+Additionally, the framework provides the ability to create neural emulators for the generative models that in some
+cases can be used to speed-up the sampling process. As an option, probabilistic neural emulators (based on Bayesian 
+Neural Networks) can be used to approximate the generative models. 
+
+This framework also provides a connection to our sampling algorithms library. Which contains reference 
+implementations of well-known sampling algorithms that can be selected as the sampling strategy for the problem 
+at hand.
+
+
 Dependencies
 ============
 - General
-    - pytorch
     - numpy
     - json
-- Reaching intent app
-    - pybullet   
+    - sampling-algorithms
+    
+- Neural emulators
+    - pytorch
+    - bayesian-layers
+       
 - Plot results
     - matplotlib
 
@@ -13,17 +32,24 @@ Dependencies
 Notation
 ========
 - x      : state space
+
 - o      : observation space.
-- z      : latent space.
-- n      : nuisance space. Used to model variables that are required by the generative model
-but are not relevant for the inference process. Such that the inference will marginalize them out.
+
+- z      : latent space. Usually model the quantities that are the target for inference.
+
+- n      : nuisance sub-space. Used to model variables that are required by the generative model but 
+           are not relevant for the inference process. Such that the inference will marginalize them out.
+           
 - ε      : slack term. Used to model the gap from the generative model to the observations.
-- g(z,n) : Generative model that maps the latent space to either the state space or the observation space. This can
-be a deterministic o = g(z,n) or stochastic o ~ p(o|z,n) generative model.
+
+- g(z,n) : Generative model that maps the latent space to either the state space or the observation space. This 
+           can be a deterministic o = g(z,n) or stochastic o ~ p(o|z,n) generative model.
+           
 - L(x,x',ε): Surrogate likelihood (ABC). Provides a likelihood value using two observations or states. Usually an 
-observation from the observation model is compared with a generated observation: L(o,g(z,n),ε) 
+             observation from the observation model is compared with a generated observation: L(o,g(z,n),ε)
+ 
 - Estimations are denoted by '. For example the estimated state space is denoted as x' and an estimated latent value z'.
-- The tilde "~" can be read as "distributed as". For example, the fact that a sample x is obtained from a prior 
+- The tilde "~" can be read as "distributed as". For example, the fact that a sample x is sampled from a prior 
 distribution p(x) can be written as: x ~ p(x).
 
 
@@ -77,16 +103,17 @@ Implementing a new application with neural emulators
     - Inference (e.g. reaching_intent.main_inference.py)
 
 
-Author
-======
+Authors
+=======
 - Javier Felip Leon (javier.felip.leon@intel.com)
 
 
 Contributors
 ============
+ 
 
 References
 ==========
 - Felip, J., Ahuja, N., Gómez-Gutiérrez, D., Tickoo, O., & Mansinghka, V. (2019). Real-time Approximate Bayesian Computation for Scene Understanding. arXiv preprint arXiv:1905.13307.
 
-Last updated: Jul 2019
+Last updated: Jun 2020

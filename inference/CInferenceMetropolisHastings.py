@@ -69,7 +69,7 @@ class CInferenceMetropolisHastings(CBaseInferenceAlgorithm):
             n_evals = n_evals + 1
             # Sample from the proposal distribution a new value for the parameters
             tic = time.time()
-            z_hat = z + proposal_sampler.sample(nsamples=1, params=None)
+            z_hat[active_dim] = z[active_dim] + proposal_sampler[active_dim].sample(nsamples=1, params=None)
             # Limit the sample
             z_hat = torch.max(z_hat, z_min)
             z_hat = torch.min(z_hat, z_max)
@@ -108,12 +108,11 @@ class CInferenceMetropolisHastings(CBaseInferenceAlgorithm):
             #     draw_point(z_hat.view(-1), [1, 0, 0], 0.01, physicsClientId=visualizer)
             # print("MCMC accepted samples:", len(samples))
 
-        # print("MCMC stats: Total samples: %d || Accepted: %d || Accept Ratio: %3.2f%% || Avg. sample time: %3.3fs" %
-        #       (n_evals, len(samples), (len(samples)/float(n_evals))*100.0, stats["tsamples"] / stats["nsamples"]))
-
         stats["nsamples"] = len(samples)
         stats["nevals"] = n_evals * len(slacks)
         stats["ngens"] = n_evals
+        print("MCMC stats: Total samples: %d || Accepted: %d || Accept Ratio: %3.2f%% || Avg. sample time: %3.3fs" %
+              (n_evals, len(samples), (len(samples)/float(n_evals))*100.0, stats["tsamples"] / stats["nsamples"]))
 
         if len(samples) <= burn_in_samples:
             return samples, torch.from_numpy(likelihoods), stats

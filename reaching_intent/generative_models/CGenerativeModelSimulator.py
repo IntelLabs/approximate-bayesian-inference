@@ -9,6 +9,8 @@ from utils.draw import draw_point
 from utils.draw import draw_trajectory
 import utils.pybullet_utils as pb
 import utils.pybullet_controller as pbc
+from pathlib import Path
+from os import sep
 
 
 def create_sim_params(sim_viz=True, sim_timestep=0.01, sim_time=5.0,
@@ -116,7 +118,7 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
     def generate(self, z, n):
         """
         Generates a trajectory using the initial cartesian position, target cartesian position and controller
-        parameters (Kp Ki Kd Krep).
+        parameters (Kp Ki Kd iClamp Krep).
         """
 
         assert len(z) == len(n), "Latent and nuisance number of samples (batch dimension size) must match"
@@ -126,9 +128,9 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
         # The parameters are passed to a neural network in mini-batches. Iterate through the minibatch
         # and generate all desired trajectories
         for i in range(len(z)):
-            goal = z[i]        # Goal hand position (x,y,z)
-            start = n[i, 0:3]  # Starting hand position (x,y,z)
-            K = n[i, 3:]       # Controller parameters (Kp Ki Kd iClamp Krep)
+            goal = t_tensor(z[i])        # Goal hand position (x,y,z)
+            start = t_tensor(n[i, 0:3])  # Starting hand position (x,y,z)
+            K = t_tensor(n[i, 3:])       # Controller parameters (Kp Ki Kd iClamp Krep)
 
             # Obtain initial joint values corresponding to the start cartesian position
             # joint_vals = pb.get_actuable_joint_angles(self.model_id, physicsClientId=self.sim_id) # Use this for generating ik solutions that start at the current position
@@ -139,7 +141,7 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
 
             goal_threshold = 0.03
             timeout = self.sim_time
-            [plan_joint, plan_cart] = self.get_plan(joints_ik, goal, self.model_id, self.eef_link, K, goal_threshold, timeout, self.obstacles, physicsClientId=self.sim_id)
+            [plan_joint, plan_cart] = self.get_plan(t_tensor(joints_ik), goal, self.model_id, self.eef_link, K, goal_threshold, timeout, self.obstacles, physicsClientId=self.sim_id)
 
             res = resample_trajectory(plan_cart, 1/self.timestep, self.sample_rate)
             trajs = torch.cat((trajs, res))

@@ -23,6 +23,7 @@ class CSamplerMultivariateNormal(CBaseSampler):
 
         return self.sampler.log_prob(samples)
 
+
 # Custom implementation. Some optimizations such as precomputing the determinant and the log determinant
 # class CMultivariateGaussian:
 #     def __init__(self, mean, cov):

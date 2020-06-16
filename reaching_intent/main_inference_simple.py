@@ -23,7 +23,7 @@ if __name__ == "__main__":
     #################################################################################
     # APPLICATION SPECIFIC PARAMETERS
     #################################################################################
-    sim_viz = True  # Show visualization of the simulator
+    sim_viz = False  # Show visualization of the simulator
     n_dims = 3      # Point dimensionality
     #################################################################################
     #################################################################################
@@ -83,7 +83,7 @@ if __name__ == "__main__":
     prior_distribution = CSamplerUniform({"min": z_min, "max": z_max})
     nuisance_sampler = CSamplerUniform({"min": n_min, "max": n_max})
     proposal_distribution = CSamplerMultivariateNormal({"mean": torch.zeros_like(z_min),
-                                                        "std": t_tensor([0.01, 0.01, 1e-6])})
+                                                        "std": t_tensor([0.001, 0.001, 1e-6])})
     #################################################################################
     #################################################################################
 
@@ -131,8 +131,8 @@ if __name__ == "__main__":
     # SELECTION of generative model and inference algorithm
     #################################################################################
     gen_model = gen_model_neural_emulator
-    neInference = neInferenceGrid
-    # neInference = neInferenceMCMC
+    # neInference = neInferenceGrid
+    neInference = neInferenceMCMC
     # gen_model = gen_model_sim
     #################################################################################
     #################################################################################

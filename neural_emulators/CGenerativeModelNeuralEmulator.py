@@ -27,7 +27,7 @@ class CGenerativeModelNeuralEmulator(CBaseGenerativeNeuralEmulator):
             self.model = None
 
     def generate(self, z, n):
-        self.NN_result = self.model(z)
+        self.NN_result = self.model(t_tensor(z))
         return self.NN_result[:, 0:int(self.output_dims)]
 
     def move_to_device(self, device):

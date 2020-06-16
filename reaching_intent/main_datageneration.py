@@ -31,7 +31,7 @@ if len(sys.argv) > 1:
 ###################################
 # APPLICATION SPECIFIC PARAMETERS (add/remove/edit parameters to fit your implementation)
 ###################################
-sim_viz = False      # Visualize the generation process
+sim_viz = True      # Visualize the generation process
 sample_rate = 30    # Samples per second
 
 # Generative model parameter limits: start volume (x,y,z), end volume (x,y,z), controller(Kp,Ki,Kd,Krep,iClamp)
@@ -51,7 +51,9 @@ nuisance_mask = t_tensor([0,0,0,1,1,1,0,0,0,0,0]) == 0  # The rest of the parame
 param_sampler = CSamplerUniform({"min": param_limits_min, "max": param_limits_max})
 
 # Get simulator parameters from the app specific import
-simulator_params = create_sim_params(sim_viz=sim_viz, sample_rate=sample_rate)
+simulator_params = create_sim_params(sim_viz=sim_viz,
+                                     sample_rate=sample_rate,
+                                     model_path="pybullet_models/human_torso/model.urdf")
 
 # Simulator used to generate synthetic data
 neSimulator = CGenerativeModelSimulator(simulator_params)
