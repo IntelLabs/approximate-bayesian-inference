@@ -1,14 +1,12 @@
 #!/usr/bin/python3
 
-
-# TODO!!! WARNING!! This is old code. Look at main_training_simple.py instead
-
 #################
 # SYSTEM IMPORTS
 #################
 from common.common import *
 import torch.nn
 import time
+import datetime
 import pybullet as p
 import numpy as np
 
@@ -42,13 +40,10 @@ from utils.draw import draw_point
 ###################################
 # APPLICATION SPECIFIC PARAMETERS (add/remove/edit parameters to fit your implementation)
 ###################################
-sample_rate             = 30 # Sensor sampling rate
-
-sim_time                = 5  # Prediction time window
-
-n_dims                  = 3  # Point dimensionality
-
-n_points                = sample_rate * sim_time
+sample_rate = 30    # Sensor sampling rate
+sim_time = 5        # Prediction time window in seconds
+n_dims = 3          # Point dimensionality
+n_points = sample_rate * sim_time
 ###################################
 
 
@@ -71,7 +66,7 @@ train_learning_rate     = 1e-4
 
 minibatch_size          = 16
 
-activation              = torch.nn.functional.tanh
+activation              = torch.tanh
 
 train_percentage        = 0.9
 
@@ -83,11 +78,8 @@ noise_sigma             = 0.001  # Sigma of the multivariate normal used to add 
 
 load_existing_model = True
 
-# nn_model_path = "models/continous_table10K.pt"
-nn_model_path = "pytorch_models/ne4_10k_gpu_MSE_2.pt"
+nn_model_path = "pytorch_models/ne_fc4_10k_MSE_in%d_out%d.pt" % (input_dim, output_dim)
 
-# dataset_path = "datasets/continous_table10K.dat"
-# dataset_path = "datasets/10k_5_0_0.01_25_0.1_viapoint.dat"
 dataset_path = "datasets/default.dat"  # Small dataset for testing the approach
 
 debug = False
@@ -98,7 +90,6 @@ viz_debug = True
 # GENERIC CODE
 ###############
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
-# device = "cpu"
 
 neNEmulator = CGenerativeModelNeuralEmulator(nn_model_path)  # Neural emulator for the likelihood function
 
@@ -144,6 +135,7 @@ if viz_debug:
         draw_trajectory(dataset_traj.view(-1,3), color=[1, 1, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
 
 train_time = time.time()
+train_ini_time = time.time()
 current_epoch = 0
 current_loss = train_loss_threshold + 1
 while current_loss > train_loss_threshold:
@@ -153,9 +145,12 @@ while current_loss > train_loss_threshold:
     current_epoch = current_epoch + 1
     current_loss, loss_terms = neNEmulator.model.test(test_dataset)
     current_loss_train, loss_terms_train = neNEmulator.model.test(train_dataset)
-    print("Epoch: %d  train loss: %3.3f  test_loss: %3.3f  time: %3.3f" %
-          (current_epoch, current_loss_train, current_loss, train_time))
+    print("Epoch: %d  train loss: %3.3f  test_loss: %3.3f  epoch_time: %3.3f total_time: %s" %
+          (current_epoch, current_loss_train, current_loss, train_time, str(datetime.timedelta(seconds=(time.time()-train_ini_time)))))
     # print('   loss terms: %3.5f\t%3.5f\t%3.5f\t%3.5f' % (loss_terms[0], loss_terms[1], loss_terms[2], loss_terms[3]))
+    str_status = "%d %3.3f %3.3f %3.3f %3.3f \n" % (current_epoch, current_loss_train, current_loss, train_time, time.time()-train_ini_time)
+    with open(nn_model_path + ".train_report.txt", "a+") as fp:
+        fp.write(str_status)
 
     if current_epoch % 100 == 0:
         torch.save(neNEmulator.model, nn_model_path)

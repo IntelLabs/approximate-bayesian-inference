@@ -21,8 +21,8 @@ from reaching_intent.generative_models.CReachingDataset import CReachingDataset
 ###################################
 dataset_path = "datasets/default.dat"
 dataset_points = 1e4   # Number of data points that the dataset will contain
-dataset_gen_batch = 1e3   # Max number of data points generated before saving to a file. Important to save batches
-                          # when generating huge datasets to keep memory requirements bounded
+dataset_gen_batch = 1e3   # Max number of data points generated before saving to a file. Important to save
+                          # batches when generating huge datasets to keep memory requirements bounded
 
 if len(sys.argv) > 1:
     dataset_path = sys.argv[1]
@@ -78,10 +78,11 @@ while dataset_size < dataset_points:
         # Discard trajectories that do not end close to the goal
         if torch.sqrt(((generated[0][-3:] - z)*(generated[0][-3:] - z)).sum()) > 0.3:
             print("invalid trajectory")
+            i -= 1
             continue
 
         dataset.samples.append([params, generated.view(-1)])
-        print("Traj %d / %d. Time %2.4f" % (len(dataset), dataset_points, time.time() - t_ini))
+        print("Traj %d / %d. Time %2.4f" % (len(dataset) + dataset_size, dataset_points, time.time() - t_ini))
 
     dataset.dataset_save(dataset_path)
     dataset_size = dataset_size + len(dataset)
