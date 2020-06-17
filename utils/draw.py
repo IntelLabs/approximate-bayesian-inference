@@ -50,7 +50,7 @@ def draw_text(text, position, visualizer, color=(1,1,1)):
     if visualizer is None:
         return
 
-    return p.addUserDebugText(text, textPosition=position, physicsClientId=visualizer, color=color)
+    return p.addUserDebugText(text, textPosition=position, physicsClientId=visualizer, textColorRGB=color)
 
 
 def draw_trajectory_cov(traj, cov, color_traj=[1, 0, 0], width=1, lifetime=0, physicsClientId=0, color_cov=[1, 0, 0]):

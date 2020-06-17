@@ -34,6 +34,7 @@ from neural_emulators.loss_functions import loss_MSE
 from utils.draw import draw_trajectory
 from utils.draw import draw_trajectory_diff
 from utils.draw import draw_point
+from utils.draw import draw_text
 # import mss  # For screenshots
 
 
@@ -163,10 +164,13 @@ while current_loss > train_loss_threshold:
             p.removeAllUserDebugItems()
             traj_gen = neNEmulator.generate(z.to(neNEmulator.model.device).view(1,-1), n=None)[0]
             traj_gt = test_dataset.samples[sample_idx][1].view(-1,3)
-            draw_trajectory(traj_gen.view(-1,3), color=[1, 0, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
+            draw_trajectory(traj_gen.view(-1, 3), color=[1, 0, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
             draw_trajectory(traj_gt, color=[0, 1, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
-            draw_trajectory_diff(traj_gen.view(-1,3), traj_gt, color=[0, 0, 1], width=1, physicsClientId=neSimulator.sim_id)
+            draw_trajectory_diff(traj_gen.view(-1, 3), traj_gt, color=[0, 0, 1], width=1, physicsClientId=neSimulator.sim_id)
             draw_point(z, [0, 0, 1], size=0.05, width=5, physicsClientId=neSimulator.sim_id)
+            loss, loss_terms = neNEmulator.model.criterion(traj_gen.view(-1, 3), traj_gt)
+            draw_text("Test Gen: loss: %5.3f" % torch.sqrt(loss).mean().item(), traj_gen.view(-1, 3)[-1], neSimulator.sim_id, [1, 0, 0])
+            draw_text("Test GT", traj_gt[-1], neSimulator.sim_id, [0, 1, 0])
 
             # Compute and show a trajectory from the train dataset
             sample_idx = np.random.random_integers(0, len(train_dataset)-1)
@@ -174,9 +178,12 @@ while current_loss > train_loss_threshold:
             traj_gen = neNEmulator.generate(z.to(neNEmulator.model.device).view(1,-1), n=None)[0]
 
             traj_gt = train_dataset.samples[sample_idx][1].view(-1,3)
-            draw_trajectory(traj_gen.view(-1,3), color=[0.5, 0, 1], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
+            draw_trajectory(traj_gen.view(-1, 3), color=[0.5, 0, 1], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
             draw_trajectory(traj_gt, color=[0, 0.5, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
             draw_trajectory_diff(traj_gen.view(-1, 3), traj_gt, color=[1, 0, 1], width=1, physicsClientId=neSimulator.sim_id)
+            loss, loss_terms = neNEmulator.model.criterion(traj_gen.view(-1, 3), traj_gt)
+            draw_text("Train Gen: loss: %5.3f" % torch.sqrt(loss).mean().item(), traj_gen.view(-1, 3)[-1], neSimulator.sim_id, [0.5, 0, 0])
+            draw_text("Train GT", traj_gt[-1], neSimulator.sim_id, [0, 0.5, 0])
 
             # # Take a screenshot each 100 epochs
             # if current_epoch % 100 == 0:

@@ -1,24 +1,21 @@
 #!/usr/bin/python3
 import pybullet as p
 import numpy as np
-from reaching_intent_estimation.generative_models import CGenerativeModelSimulator
+from reaching_intent.generative_models import CGenerativeModelSimulator
 from utils.draw import draw_trajectory
 from utils.draw import draw_text
 from utils.draw import draw_point
-from generative_models import CReachingDataset
+from reaching_intent.generative_models import CReachingDataset
 import time
 
 
-# dataset_path  = "../../hand_tracking/trajs.dat"
-# dataset_path  = "datasets/table_top_and_side20K.dat"
-dataset_path  = "datasets/continous_table10K.dat"
+dataset_path = "datasets/default.dat"
 
+sample_rate = 30
 
-sample_rate             = 30
+noise_sigma = 0.005  # Noise added to the dataset trajectories
 
-noise_sigma             = 0.005  # Noise added to the dataset trajectories
-
-model_path       = "models/human_torso/model.urdf"
+model_path = "models/human_torso/model.urdf"
 
 # Load simulator
 simulator_params = dict()
