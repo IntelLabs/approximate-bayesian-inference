@@ -85,7 +85,7 @@ dataset_path = "datasets/default.dat"  # Small dataset for testing the approach
 
 debug = False
 
-viz_debug = False
+viz_debug = True
 
 ###############
 # GENERIC CODE
