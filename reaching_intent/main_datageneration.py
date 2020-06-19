@@ -22,11 +22,11 @@ from reaching_intent.generative_models.CReachingDataset import CReachingDataset
 dataset_path = "datasets/default.dat"
 
 # Desired number of data points that the dataset will contain
-dataset_points = 1e4
+dataset_points = 1e3
 
 # Max number of data points generated before saving to a file. Important to save batches when generating
 # huge datasets to keep memory requirements bounded.
-dataset_gen_batch = 1e3
+dataset_gen_batch = 1e2
 
 # Read the generic parameters from the command line arguments
 if len(sys.argv) > 3:
@@ -86,6 +86,7 @@ while dataset_size < dataset_points:
 
         # THIS IF IS APPLICATION SPECIFIC. CHECKS FOR THE VALIDITY OF THE DATA GENERATED
         # THE FUNCTIONALITY CAN BE EMBEDDED INTO THE GENERATIVE MODEL LOGIC THROUGH ITS CUSTOM PARAMS
+        # THAT COULD HAVE A GENERIC SANITY CHECK FOR THE GENERATED DATA
         # Discard trajectories that do not end close to the goal
         if torch.sqrt(((generated[0][-3:] - z)*(generated[0][-3:] - z)).sum()) > 0.3:
             print("invalid trajectory")
