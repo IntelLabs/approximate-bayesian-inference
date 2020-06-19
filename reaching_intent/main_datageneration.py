@@ -31,7 +31,7 @@ if len(sys.argv) > 1:
 ###################################
 # APPLICATION SPECIFIC PARAMETERS (add/remove/edit parameters to fit your implementation)
 ###################################
-sim_viz = False      # Visualize the generation process
+sim_viz = False     # Visualize the generation process
 sample_rate = 30    # Samples per second
 
 # Generative model parameter limits: start volume (x,y,z), end volume (x,y,z), controller(Kp,Ki,Kd,Krep,iClamp)
@@ -39,8 +39,8 @@ param_limits_min = t_tensor([-0.05, 0.30, -0.10, 0.25, -0.4, 0.20, 5, 0.005, 0, 
 param_limits_max = t_tensor([-0.04, 0.31, -0.09, 0.90, 0.4, 0.21, 20, 0.010, 0, 0.11, 30])
 
 # Select the parameters that are considered nuisance and the parameters that are considered interesting
-latent_mask = t_tensor([0,0,0,1,1,1,0,0,0,0,0]) == 1    # We are interested in the end position
-nuisance_mask = t_tensor([0,0,0,1,1,1,0,0,0,0,0]) == 0  # The rest of the parameters are considered nuisance
+latent_mask = t_tensor([0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0]) == 1    # We are interested in the end position
+nuisance_mask = t_tensor([1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1]) == 1  # The rest of the parameters are considered nuisance
 ###################################
 
 

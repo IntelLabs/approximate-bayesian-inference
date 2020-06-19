@@ -6,7 +6,7 @@
 from common.common import *
 import torch.nn
 import pybullet as p
-import numpy as np
+import time
 from samplers.CSamplerUniform import CSamplerUniform
 
 #######################################
@@ -86,9 +86,10 @@ while p.isConnected(neSimulator.sim_id):
 
     # Wait for N or space keypress to generate next
     while p.isConnected(neSimulator.sim_id):
-        keys = p.getKeyboardEvents()
+        keys = p.getKeyboardEvents(neSimulator.sim_id)
         if ord('n') in keys and keys[ord('n')] & p.KEY_WAS_TRIGGERED:
             break
+        time.sleep(0.01)
 
     p.removeAllUserDebugItems()
 
