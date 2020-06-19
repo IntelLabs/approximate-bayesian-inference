@@ -20,12 +20,19 @@ from reaching_intent.generative_models.CReachingDataset import CReachingDataset
 # GENERIC PARAMETERS (tune for each application)
 ###################################
 dataset_path = "datasets/default.dat"
-dataset_points = 1e4   # Number of data points that the dataset will contain
-dataset_gen_batch = 1e3   # Max number of data points generated before saving to a file. Important to save
-                          # batches when generating huge datasets to keep memory requirements bounded
 
-if len(sys.argv) > 1:
+# Desired number of data points that the dataset will contain
+dataset_points = 1e4
+
+# Max number of data points generated before saving to a file. Important to save batches when generating
+# huge datasets to keep memory requirements bounded.
+dataset_gen_batch = 1e3
+
+# Read the generic parameters from the command line arguments
+if len(sys.argv) > 3:
     dataset_path = sys.argv[1]
+    dataset_points = sys.argv[2]
+    dataset_gen_batch = sys.argv[3]
 ###################################
 
 ###################################
@@ -41,22 +48,24 @@ param_limits_max = t_tensor([-0.04, 0.31, -0.09, 0.90, 0.4, 0.21, 20, 0.010, 0, 
 # Select the parameters that are considered nuisance and the parameters that are considered interesting
 latent_mask = t_tensor([0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0]) == 1    # We are interested in the end position
 nuisance_mask = t_tensor([1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1]) == 1  # The rest of the parameters are considered nuisance
+
+# Get simulator parameters from the app specific import
+gen_model_params = create_sim_params(sim_viz=sim_viz,
+                                     sample_rate=sample_rate,
+                                     model_path="pybullet_models/human_torso/model.urdf")
 ###################################
 
 
 #################################################
 # GENERIC CODE (dataset generation)
+# Some application specific code is included and properly commented
 #################################################
-# Sampler to sample parameter values to generate trajectories
+
+# Uniform sampler to sample parameter values used by the generative model to generate data.
 param_sampler = CSamplerUniform({"min": param_limits_min, "max": param_limits_max})
 
-# Get simulator parameters from the app specific import
-simulator_params = create_sim_params(sim_viz=sim_viz,
-                                     sample_rate=sample_rate,
-                                     model_path="pybullet_models/human_torso/model.urdf")
-
-# Simulator used to generate synthetic data
-neSimulator = CGenerativeModelSimulator(simulator_params)
+# Create an instance of a generative model used to generate synthetic data
+gen_model = CGenerativeModelSimulator(gen_model_params)
 
 # Check if the dataset is completely generated. Generate it otherwise
 print("Load/generate dataset...")
@@ -73,8 +82,10 @@ while dataset_size < dataset_points:
         params = param_sampler.sample(nsamples=1, params=None)
         z = params[:, latent_mask]
         n = params[:, nuisance_mask]
-        generated = neSimulator.generate(z, n)
+        generated = gen_model.generate(z, n)
 
+        # THIS IF IS APPLICATION SPECIFIC. CHECKS FOR THE VALIDITY OF THE DATA GENERATED
+        # THE FUNCTIONALITY CAN BE EMBEDDED INTO THE GENERATIVE MODEL LOGIC THROUGH ITS CUSTOM PARAMS
         # Discard trajectories that do not end close to the goal
         if torch.sqrt(((generated[0][-3:] - z)*(generated[0][-3:] - z)).sum()) > 0.3:
             print("invalid trajectory")
