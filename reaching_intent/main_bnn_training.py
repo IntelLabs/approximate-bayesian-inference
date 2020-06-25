@@ -65,9 +65,9 @@ train_loss_threshold    = -3000
 
 train_epochs            = 1
 
-train_learning_rate     = 1e-4
+train_learning_rate     = 1e-3
 
-minibatch_size          = 16
+minibatch_size          = 32
 
 activation              = torch.tanh
 
@@ -79,7 +79,7 @@ loss_f                  = loss_MSE
 
 noise_sigma             = 0.001  # Sigma of the multivariate normal used to add noise to the ground truth position read from the simulator
 
-load_existing_model = False
+load_existing_model = True
 
 nn_model_path = "pytorch_models/ne_bfc4_10k_MSE_in%d_out%d.pt" % (input_dim, output_dim)
 
@@ -103,12 +103,12 @@ if not neNEmulator.model or not load_existing_model:
     neNEmulator.input_dims = int(torch.sum(latent_mask).numpy())
 else:
     neNEmulator.model.move_to_device(device)
+    neNEmulator.model.mc_samples = 20
 
 neNEmulator.model.latent_mask = latent_mask
 neNEmulator.model.activation = activation
 neNEmulator.model.criterion = loss_f
 neNEmulator.model.debug = False
-
 
 if viz_debug:
     # Load simulator for visualization purposes only
@@ -166,7 +166,7 @@ while current_loss > train_loss_threshold:
             sample_idx = np.random.random_integers(0, len(test_dataset)-1)
             z = test_dataset.samples[sample_idx][0][latent_mask]
             p.removeAllUserDebugItems()
-            traj_gen, traj_std = neNEmulator.generate(z.to(neNEmulator.model.device).view(1,-1), n=None)[0]
+            traj_gen, traj_std = neNEmulator.generate(z.to(neNEmulator.model.device).view(1,-1), n=None)
             traj_gt = test_dataset.samples[sample_idx][1].view(-1,3)
             draw_trajectory(traj_gen.view(-1, 3), color=[1, 0, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
             draw_trajectory(traj_gt, color=[0, 1, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
@@ -179,7 +179,7 @@ while current_loss > train_loss_threshold:
             # Compute and show a trajectory from the train dataset
             sample_idx = np.random.random_integers(0, len(train_dataset)-1)
             z = train_dataset.samples[sample_idx][0][latent_mask]
-            traj_gen, traj_std = neNEmulator.generate(z.to(neNEmulator.model.device).view(1,-1), n=None)[0]
+            traj_gen, traj_std = neNEmulator.generate(z.to(neNEmulator.model.device).view(1,-1), n=None)
 
             traj_gt = train_dataset.samples[sample_idx][1].view(-1,3)
             draw_trajectory(traj_gen.view(-1, 3), color=[0.5, 0, 1], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)

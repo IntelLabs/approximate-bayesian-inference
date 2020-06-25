@@ -12,7 +12,7 @@ class CBayesianNeuralEmulatorNN(nn.Module):
     def __init__(self, input_dim, output_dim, nlayers=4, debug=False, device="cpu", activation=F.relu, criterion=F.mse_loss):
         super(CBayesianNeuralEmulatorNN, self).__init__()
         self.is_differentiable = True
-
+        self.mc_samples = 20
         self.device = device
         device = torch.device(self.device)
 
@@ -58,7 +58,7 @@ class CBayesianNeuralEmulatorNN(nn.Module):
             params.extend(l.parameters())
         return params
 
-    def forward(self, x, dropout=None):
+    def forward(self, x):
         kl_sum = 0
         for i in range(len(self.layers)-1):
             x, kl = self.layers[i](x)
@@ -97,6 +97,7 @@ class CBayesianNeuralEmulatorNN(nn.Module):
         return loss.mean().item() + scaled_kl, [loss_terms[0].mean().item(), loss_terms[1].mean().item(), loss_terms[2].mean().item(), loss_terms[3].mean().item(), scaled_kl]
 
     def train(self, dataset, epochs, learning_rate=0.01, minibatch_size=1024):
+        torch.autograd.set_detect_anomaly(True)
 
         device = torch.device(self.device)
 
@@ -115,14 +116,23 @@ class CBayesianNeuralEmulatorNN(nn.Module):
                 # zero the parameter gradientsK
                 optimizer.zero_grad()
 
-                # forward + backward + optimize
-                outputs, kl = self.forward(inputs)  # Use dropout when training to avoid overfitting
-                scaled_kl = kl / minibatch_size
-                loss, loss_terms = self.criterion(outputs, ground_truth)
+                # compute output
+                output_ = []
+                kl_ = []
+                for mc_run in range(self.mc_samples):
+                    output, kl = self.forward(inputs)
+                    output_.append(output)
+                    kl_.append(kl)
+                output = torch.mean(torch.stack(output_), dim=0)
+                kl = torch.mean(torch.stack(kl_), dim=0)
 
-                final_loss = loss.mean() + scaled_kl
+                # output, kl = self.forward(inputs)
+
+                scaled_kl = kl / minibatch_size
+                loss, loss_terms = self.criterion(output, ground_truth)
+                final_loss = loss + scaled_kl
                 # https://discuss.pytorch.org/t/loss-backward-raises-error-grad-can-be-implicitly-created-only-for-scalar-outputs/12152
-                final_loss.backward()
+                final_loss.mean().backward()
                 optimizer.step()
 
                 # print statistics
