@@ -21,7 +21,7 @@ from neural_emulators.CBayesianNeuralEmulatorNN import CBayesianNeuralEmulatorNN
 # GENERIC IMPORTS (no need to edit)
 #######################################
 from reaching_intent.generative_models.CReachingDataset import CReachingDataset
-from neural_emulators.CGenerativeModelNeuralEmulator import CGenerativeModelNeuralEmulator
+from neural_emulators.CGenerativeModelBayesianNeuralEmulator import CGenerativeModelBayesianNeuralEmulator
 from reaching_intent.generative_models.CGenerativeModelSimulator import CGenerativeModelSimulator
 from reaching_intent.generative_models.CGenerativeModelSimulator import create_sim_params
 from neural_emulators.loss_functions import loss_MSE
@@ -74,13 +74,13 @@ train_percentage        = 0.9
 
 nn_layers               = 4
 
-loss_f                  = neg_log_likelihood
+loss_f                  = loss_MSE
 
 noise_sigma             = 0.001  # Sigma of the multivariate normal used to add noise to the ground truth position read from the simulator
 
-load_existing_model = True
+load_existing_model = False
 
-nn_model_path = "pytorch_models/ne_fc4_10k_MSE_in%d_out%d.pt" % (input_dim, output_dim)
+nn_model_path = "pytorch_models/ne_bfc4_10k_MSE_in%d_out%d.pt" % (input_dim, output_dim)
 
 dataset_path = "datasets/default.dat"  # Small dataset for testing the approach
 
@@ -93,11 +93,13 @@ viz_debug = True
 ###############
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
-neNEmulator = CGenerativeModelNeuralEmulator(nn_model_path)  # Neural emulator for the likelihood function
+neNEmulator = CGenerativeModelBayesianNeuralEmulator(nn_model_path)  # Neural emulator for the likelihood function
 
 # Check if there is a neural emulator model loaded. Create a new one otherwise.
 if not neNEmulator.model or not load_existing_model:
     neNEmulator.model = CBayesianNeuralEmulatorNN(torch.sum(latent_mask), output_dim, nn_layers, debug, device, activation, loss_f)
+    neNEmulator.output_dims = output_dim
+    neNEmulator.input_dims = int(torch.sum(latent_mask).numpy())
 else:
     neNEmulator.model.move_to_device(device)
 
@@ -130,11 +132,11 @@ for i in range(len(dataset)):
 print("Loaded dataset with %d data points. took: %.3f" % (len(dataset), time.time() - tic))
 
 # Show some random trajectories from the dataset
-if viz_debug:
-    for i in range(10):
-        idx = int((torch.rand(1) * len(dataset)).item())
-        dataset_traj = dataset.samples[idx][1]
-        draw_trajectory(dataset_traj.view(-1,3), color=[1, 1, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
+# if viz_debug:
+#     for i in range(10):
+#         idx = int((torch.rand(1) * len(dataset)).item())
+#         dataset_traj = dataset.samples[idx][1]
+#         draw_trajectory(dataset_traj.view(-1,3), color=[1, 1, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
 
 train_time = time.time()
 train_ini_time = time.time()

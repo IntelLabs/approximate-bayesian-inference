@@ -12,7 +12,7 @@ from samplers.CSamplerUniform import CSamplerUniform
 #######################################
 # GENERIC IMPORTS (no need to edit)
 #######################################
-from neural_emulators.CGenerativeModelNeuralEmulator import CGenerativeModelNeuralEmulator
+from neural_emulators.CGenerativeModelBayesianNeuralEmulator import CGenerativeModelBayesianNeuralEmulator
 from reaching_intent.generative_models.CGenerativeModelSimulator import CGenerativeModelSimulator
 from reaching_intent.generative_models.CGenerativeModelSimulator import create_sim_params
 ##############################
@@ -44,7 +44,7 @@ latent_mask = t_tensor([0,0,0,1,1,1,0,0,0,0,0]) == 1    # We are interested in t
 nuisance_mask = t_tensor([0,0,0,1,1,1,0,0,0,0,0]) == 0  # The rest of the parameters are considered nuisance
 
 # Neural emulator path
-nn_model_path = "pytorch_models/ne_fc4_10k_MSE_in11_out450.pt"
+nn_model_path = "pytorch_models/ne_bfc4_10k_MSE_in11_out450.pt"
 ###################################
 
 
@@ -57,7 +57,7 @@ param_sampler = CSamplerUniform({"min": param_limits_min, "max": param_limits_ma
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 # Load the neural emulator generative model
-neNEmulator = CGenerativeModelNeuralEmulator(nn_model_path)
+neNEmulator = CGenerativeModelBayesianNeuralEmulator(nn_model_path)
 
 # Load simulator for visualization purposes only
 simulator_params = create_sim_params(sim_time=sim_time, sample_rate=sample_rate)

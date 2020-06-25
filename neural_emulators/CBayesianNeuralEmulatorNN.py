@@ -5,7 +5,7 @@ import torch.optim as optim
 import torch.utils.data
 
 from common.common import *
-from torch_vi.layers.reparametrization_layers.linear_variational import LinearReparameterization
+from torch_vi.layers.variational_layers.linear_variational import LinearReparameterization
 
 
 class CBayesianNeuralEmulatorNN(nn.Module):
@@ -19,14 +19,13 @@ class CBayesianNeuralEmulatorNN(nn.Module):
         self.activation = activation
         self.criterion = criterion
         self.arch = ""
-        self.dropout = nn.Dropout(p=0.2)
 
         self.layers = [None] * nlayers
 
-        self.layers[0] = nn.LinearReparameterization(0, 1, 0, -3, input_dim, output_dim).to(device)
+        self.layers[0] = LinearReparameterization(0, 1, 0, -3, input_dim, output_dim).to(device)
         self.arch = self.arch + "bfc{%d_%d}-" % (input_dim, output_dim)
         for i in range(1, nlayers):
-            self.layers[i] = nn.LinearReparameterization(0, 1, 0, -3, output_dim, output_dim).to(device)
+            self.layers[i] = LinearReparameterization(0, 1, 0, -3, output_dim, output_dim).to(device)
             self.arch = self.arch + "bfc{%d_%d}-" % (output_dim, output_dim)
 
         self.output_dim = output_dim
@@ -64,8 +63,6 @@ class CBayesianNeuralEmulatorNN(nn.Module):
         for i in range(len(self.layers)-1):
             x, kl = self.layers[i](x)
             kl_sum += kl
-            if dropout is not None:
-                x = dropout(x)
             x = self.activation(x)
 
         # Do not use activation in the last layer.
@@ -93,10 +90,11 @@ class CBayesianNeuralEmulatorNN(nn.Module):
                 ground_truth = ground_truth.to(device)
 
                 # forward passes and loss computation
-                outputs, kl = self.forward(inputs, dropout=None)
+                outputs, kl = self.forward(inputs)
+                scaled_kl = kl / len(inputs)
                 loss, loss_terms = self.criterion(outputs, ground_truth)
 
-        return loss.mean().item(), [loss_terms[0].mean().item(), loss_terms[1].mean().item(), loss_terms[2].mean().item(), loss_terms[3].mean().item()]
+        return loss.mean().item() + scaled_kl, [loss_terms[0].mean().item(), loss_terms[1].mean().item(), loss_terms[2].mean().item(), loss_terms[3].mean().item(), scaled_kl]
 
     def train(self, dataset, epochs, learning_rate=0.01, minibatch_size=1024):
 
@@ -118,9 +116,13 @@ class CBayesianNeuralEmulatorNN(nn.Module):
                 optimizer.zero_grad()
 
                 # forward + backward + optimize
-                outputs, kl = self.forward(inputs, nn.Dropout(p=0.2))  # Use dropout when training to avoid overfitting
+                outputs, kl = self.forward(inputs)  # Use dropout when training to avoid overfitting
+                scaled_kl = kl / minibatch_size
                 loss, loss_terms = self.criterion(outputs, ground_truth)
-                loss.mean().backward()  # https://discuss.pytorch.org/t/loss-backward-raises-error-grad-can-be-implicitly-created-only-for-scalar-outputs/12152
+
+                final_loss = loss.mean() + scaled_kl
+                # https://discuss.pytorch.org/t/loss-backward-raises-error-grad-can-be-implicitly-created-only-for-scalar-outputs/12152
+                final_loss.backward()
                 optimizer.step()
 
                 # print statistics

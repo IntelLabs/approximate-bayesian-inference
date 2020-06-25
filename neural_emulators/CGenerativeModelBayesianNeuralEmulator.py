@@ -2,10 +2,9 @@ from common.common import *
 from neural_emulators.CBaseGenerativeNeuralEmulator import CBaseGenerativeNeuralEmulator
 
 
-class CGenerativeModelNeuralEmulator(CBaseGenerativeNeuralEmulator):
+class CGenerativeModelBayesianNeuralEmulator(CBaseGenerativeNeuralEmulator):
     def __init__(self, model):
-        super(CGenerativeModelNeuralEmulator, self).__init__()
-
+        super(CGenerativeModelBayesianNeuralEmulator, self).__init__()
         self.model = None           # Neural Emulator Neural Network
         self.model_path = model     # Path to the saved neural network file
         self.output_dims = None
@@ -27,7 +26,7 @@ class CGenerativeModelNeuralEmulator(CBaseGenerativeNeuralEmulator):
             self.model = None
 
     def generate(self, z, n):
-        self.NN_result = self.model(t_tensor(z))
+        self.NN_result, kl = self.model(t_tensor(z))
         return self.NN_result[:, 0:int(self.output_dims)]
 
     def move_to_device(self, device):
