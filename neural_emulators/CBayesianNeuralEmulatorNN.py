@@ -89,10 +89,20 @@ class CBayesianNeuralEmulatorNN(nn.Module):
                 inputs = inputs.to(device)[:, self.latent_mask]
                 ground_truth = ground_truth.to(device)
 
+                # compute output
+                output_ = []
+                kl_ = []
+                for mc_run in range(self.mc_samples):
+                    output, kl = self.forward(inputs)
+                    output_.append(output)
+                    kl_.append(kl)
+                output = torch.mean(torch.stack(output_), dim=0)
+                kl = torch.mean(torch.stack(kl_), dim=0)
+
                 # forward passes and loss computation
-                outputs, kl = self.forward(inputs)
+                # outputs, kl = self.forward(inputs)
                 scaled_kl = kl / len(inputs)
-                loss, loss_terms = self.criterion(outputs, ground_truth)
+                loss, loss_terms = self.criterion(output, ground_truth)
 
         return loss.mean().item() + scaled_kl, [loss_terms[0].mean().item(), loss_terms[1].mean().item(), loss_terms[2].mean().item(), loss_terms[3].mean().item(), scaled_kl]
 
