@@ -34,6 +34,7 @@ from neural_emulators.loss_functions import neg_log_likelihood
 #######################################
 from utils.draw import draw_trajectory
 from utils.draw import draw_trajectory_diff
+from utils.draw import draw_trajectory_cov
 from utils.draw import draw_point
 from utils.draw import draw_text
 # import mss  # For screenshots
@@ -165,7 +166,7 @@ while current_loss > train_loss_threshold:
             sample_idx = np.random.random_integers(0, len(test_dataset)-1)
             z = test_dataset.samples[sample_idx][0][latent_mask]
             p.removeAllUserDebugItems()
-            traj_gen = neNEmulator.generate(z.to(neNEmulator.model.device).view(1,-1), n=None)[0]
+            traj_gen, traj_std = neNEmulator.generate(z.to(neNEmulator.model.device).view(1,-1), n=None)[0]
             traj_gt = test_dataset.samples[sample_idx][1].view(-1,3)
             draw_trajectory(traj_gen.view(-1, 3), color=[1, 0, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
             draw_trajectory(traj_gt, color=[0, 1, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
@@ -178,7 +179,7 @@ while current_loss > train_loss_threshold:
             # Compute and show a trajectory from the train dataset
             sample_idx = np.random.random_integers(0, len(train_dataset)-1)
             z = train_dataset.samples[sample_idx][0][latent_mask]
-            traj_gen = neNEmulator.generate(z.to(neNEmulator.model.device).view(1,-1), n=None)[0]
+            traj_gen, traj_std = neNEmulator.generate(z.to(neNEmulator.model.device).view(1,-1), n=None)[0]
 
             traj_gt = train_dataset.samples[sample_idx][1].view(-1,3)
             draw_trajectory(traj_gen.view(-1, 3), color=[0.5, 0, 1], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
