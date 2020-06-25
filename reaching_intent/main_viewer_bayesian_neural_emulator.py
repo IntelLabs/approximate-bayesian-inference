@@ -22,6 +22,7 @@ from reaching_intent.generative_models.CGenerativeModelSimulator import create_s
 # DEBUG DRAWING IMPORTS
 #######################################
 from utils.draw import draw_trajectory
+from utils.draw import draw_trajectory_cov
 from utils.draw import draw_trajectory_diff
 from utils.draw import draw_point
 from utils.draw import draw_text
@@ -73,10 +74,11 @@ while p.isConnected(neSimulator.sim_id):
     traj_gt = neSimulator.generate(z, n)
 
     # Generate a trajectory with the emulator
-    traj_gen = neNEmulator.generate(z.view(1, -1), n=None)[0]
+    traj_gen, traj_std = neNEmulator.generate(z.view(1, -1), n=None)
 
     # Show both trajectories and the difference
-    draw_trajectory(traj_gen.view(-1, 3), color=[1, 0, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
+    # draw_trajectory(traj_gen.view(-1, 3), color=[1, 0, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
+    draw_trajectory_cov(traj_gen.view(-1, 3), traj_std.view(-1, 3), color_traj=[1, 0, 0], width=2, physicsClientId=neSimulator.sim_id)
     draw_trajectory(traj_gt.view(-1, 3), color=[0, 1, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
     draw_trajectory_diff(traj_gen.view(-1, 3), traj_gt.view(-1, 3), color=[0, 0, 1], width=1, physicsClientId=neSimulator.sim_id)
     draw_point(z[0], [0, 0, 1], size=0.05, width=5, physicsClientId=neSimulator.sim_id)
