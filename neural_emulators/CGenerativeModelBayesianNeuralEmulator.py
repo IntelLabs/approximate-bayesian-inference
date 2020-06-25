@@ -11,6 +11,7 @@ class CGenerativeModelBayesianNeuralEmulator(CBaseGenerativeNeuralEmulator):
         self.input_dims = None
         self.initialize(model)
         self.NN_result = t_tensor([])
+        self.mc_samples = 20
 
     @staticmethod
     def get_name():
@@ -26,8 +27,12 @@ class CGenerativeModelBayesianNeuralEmulator(CBaseGenerativeNeuralEmulator):
             self.model = None
 
     def generate(self, z, n):
-        self.NN_result, kl = self.model(t_tensor(z))
-        return self.NN_result[:, 0:int(self.output_dims)]
+        self.NN_result = t_tensor(self.mc_samples, len(z), self.output_dims)
+        for i in range(self.mc_samples):
+            self.NN_result[i], kl = self.model(t_tensor(z))
+        mu = torch.mean(self.NN_result, dim=0)
+        sigma = torch.std(self.NN_result, dim=0)
+        return mu[:, 0:int(self.output_dims)], sigma[:, 0:int(self.output_dims)]
 
     def move_to_device(self, device):
         raise NotImplementedError
