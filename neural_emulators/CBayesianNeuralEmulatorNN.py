@@ -12,7 +12,7 @@ class CBayesianNeuralEmulatorNN(nn.Module):
     def __init__(self, input_dim, output_dim, nlayers=4, debug=False, device="cpu", activation=F.relu, criterion=F.mse_loss):
         super(CBayesianNeuralEmulatorNN, self).__init__()
         self.is_differentiable = True
-        self.mc_samples = 20
+        self.mc_samples = 5
         self.device = device
         device = torch.device(self.device)
 

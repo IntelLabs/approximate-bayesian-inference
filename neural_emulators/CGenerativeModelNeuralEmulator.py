@@ -5,7 +5,6 @@ from neural_emulators.CBaseGenerativeNeuralEmulator import CBaseGenerativeNeural
 class CGenerativeModelNeuralEmulator(CBaseGenerativeNeuralEmulator):
     def __init__(self, model):
         super(CGenerativeModelNeuralEmulator, self).__init__()
-
         self.model = None           # Neural Emulator Neural Network
         self.model_path = model     # Path to the saved neural network file
         self.output_dims = None

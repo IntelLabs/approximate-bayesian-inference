@@ -65,9 +65,9 @@ train_loss_threshold    = -3000
 
 train_epochs            = 1
 
-train_learning_rate     = 1e-3
+train_learning_rate     = 1e-4
 
-minibatch_size          = 32
+minibatch_size          = 16
 
 activation              = torch.tanh
 
@@ -79,7 +79,7 @@ loss_f                  = loss_MSE
 
 noise_sigma             = 0.001  # Sigma of the multivariate normal used to add noise to the ground truth position read from the simulator
 
-load_existing_model = True
+load_existing_model = False
 
 nn_model_path = "pytorch_models/ne_bfc4_10k_MSE_in%d_out%d.pt" % (input_dim, output_dim)
 
@@ -87,7 +87,7 @@ dataset_path = "datasets/default.dat"  # Small dataset for testing the approach
 
 debug = False
 
-viz_debug = True
+viz_debug = False
 
 ###############
 # GENERIC CODE
@@ -103,7 +103,7 @@ if not neNEmulator.model or not load_existing_model:
     neNEmulator.input_dims = int(torch.sum(latent_mask).numpy())
 else:
     neNEmulator.model.move_to_device(device)
-    neNEmulator.model.mc_samples = 20
+    neNEmulator.model.mc_samples = 5
 
 neNEmulator.model.latent_mask = latent_mask
 neNEmulator.model.activation = activation

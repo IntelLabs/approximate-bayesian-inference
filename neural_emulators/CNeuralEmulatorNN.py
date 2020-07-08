@@ -118,7 +118,8 @@ class CNeuralEmulatorNN(nn.Module):
                 outputs = self.forward(inputs, nn.Dropout(p=0.2)) # Use dropout when training to avoid overfitting
                 # outputs = self.forward(inputs, None)
                 loss, loss_terms = self.criterion(outputs, ground_truth)
-                loss.mean().backward()  # https://discuss.pytorch.org/t/loss-backward-raises-error-grad-can-be-implicitly-created-only-for-scalar-outputs/12152
+                # https://discuss.pytorch.org/t/loss-backward-raises-error-grad-can-be-implicitly-created-only-for-scalar-outputs/12152
+                loss.mean().backward()
                 optimizer.step()
 
                 # print statistics
