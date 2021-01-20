@@ -72,7 +72,7 @@ if __name__ == "__main__":
     # GENERATIVE MODEL NEURAL EMULATOR
     #################################################################################
     print("Load generative model: Neural Surrogate")
-    nn_model_path = "pytorch_models/test10k_gpu_MSE_2.pt"
+    nn_model_path = "pytorch_models/ne_fc3_10k_MSE_in11_out450.pt"
     gen_model_neural_emulator = CGenerativeModelNeuralEmulator(nn_model_path)
     #################################################################################
     #################################################################################
@@ -151,9 +151,15 @@ if __name__ == "__main__":
     #################################################################################
     #################################################################################
 
+    # Draw ground truth
+    if visualizer is not None:
+        draw_trajectory(obs_model.traj.view(-1, n_dims), draw_points=False, physicsClientId=visualizer)
+        draw_point(obs_model.get_ground_truth()[latent_mask], [0, 1, 0], size=0.05, width=5, physicsClientId=visualizer)
+
     #################################################################################
     # INFERENCE LOOP
     #################################################################################
+    viz_items = []
     iteration = 0
     while obs_model.is_ready():
         # Obtain observation and initialize latent space and nuisance values from their priors
@@ -166,10 +172,12 @@ if __name__ == "__main__":
 
         # Draw current observation (purple) and ground truth trajectory (red)
         if visualizer is not None:
-            pybullet.removeAllUserDebugItems(physicsClientId=visualizer)
-            draw_trajectory(obs_model.traj.view(-1, n_dims), draw_points=False, physicsClientId=visualizer)
-            draw_trajectory(o.view(-1, n_dims), draw_points=True, width=3.0, color=[1, 0, 1], physicsClientId=visualizer)
-            draw_point(obs_model.get_ground_truth()[latent_mask], [0, 1, 0], size=0.05, width=5, physicsClientId=visualizer)
+            for viz_item in viz_items:
+                pybullet.removeUserDebugItem(viz_item, physicsClientId=visualizer)
+            viz_items.extend(
+                draw_trajectory(o.view(-1, n_dims), draw_points=True, width=3.0, color=[1, 0, 1],
+                                physicsClientId=visualizer)
+            )
 
         print("Run inference with %d observed points." % (len(o) / n_dims))
         t_inference = time.time()
@@ -208,7 +216,11 @@ if __name__ == "__main__":
         with open("results_%s_%s.dat" % (gen_model.get_name(), neInference.get_name()), "a") as f:
             f.write("%2.8f %2.8f %2.8f %2.8f %2.6f %2.6f %2.6f %d  %d\n" % (error, runtime, traj_percent, MAP_slack, stats["tsamples"], stats["tgens"], stats["tevals"], stats["nevals"], stats["nsamples"]))
 
-        draw_point(MAP_z, [1, 0, 0], size=0.05, width=5, physicsClientId=visualizer)
+        if visualizer is not None:
+            # for s in samples:
+            #     viz_items.extend(draw_point(s, [0, 0, 1], size=0.01, width=2, physicsClientId=visualizer, lifetime=1.0))
+            #     draw_point(s, [0, 0, 1], size=0.01, width=2, physicsClientId=visualizer, lifetime=10.0)
+            viz_items.extend(draw_point(MAP_z, [1, 0, 0], size=0.05, width=5, physicsClientId=visualizer))
         time.sleep(0.1)
 
         iteration = iteration + 1
