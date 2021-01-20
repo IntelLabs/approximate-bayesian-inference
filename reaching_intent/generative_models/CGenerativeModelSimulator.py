@@ -62,7 +62,6 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
         self.model = self.Model(self.generate, 4, self.sim_time * self.sample_rate * 3, self.device)
         self.coll_disable_pairs = []
         self.initialize(self.model_path, self.visualize, self.timestep, self.sim_time)
-        self.joint_rest_positions = []
 
     @staticmethod
     def get_name():
@@ -92,16 +91,18 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
 
         # Set the resting position for each joint
         joint_indices = pb.get_actuable_joint_indices(self.model_id, self.sim_id)
-        joint_rest_positions = torch.zeros(len(joint_indices))
-        joint_rest_positions[5] = -1.04  # Elbow at 60 deg
+        joint_rest_positions = t_tensor(torch.zeros(len(joint_indices)))
+        joint_rest_positions[5] = -.5  # Elbow at 60 deg
         joint_rest_positions[6] = 1.57   # Palm down
         self.joint_rest_positions = joint_rest_positions
+        pb.set_joint_angles(self.model_id, self.joint_rest_positions, physicsClientId=self.sim_id)
 
     def reset(self):
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0)
         p.resetSimulation(physicsClientId=self.sim_id)
         p.setGravity(0, 0, -9.81, physicsClientId=self.sim_id)
         self.model_id = p.loadURDF(self.model_path, useFixedBase=1, physicsClientId=self.sim_id, flags=p.URDF_USE_SELF_COLLISION)
+        pb.set_joint_angles(self.model_id, self.joint_rest_positions, physicsClientId=self.sim_id)
         for pair in self.coll_disable_pairs:
             p.setCollisionFilterPair(bodyUniqueIdA=self.model_id, bodyUniqueIdB=self.model_id, linkIndexA=pair[0],
                                      linkIndexB=pair[1], enableCollision=0, physicsClientId=self.sim_id)
@@ -134,18 +135,19 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
 
             # Obtain initial joint values corresponding to the start cartesian position
             # joint_vals = pb.get_actuable_joint_angles(self.model_id, physicsClientId=self.sim_id) # Use this for generating ik solutions that start at the current position
-            joint_vals = torch.zeros_like(t_tensor(self.joint_rest_positions))
+            # joint_vals = torch.zeros_like(t_tensor(self.joint_rest_positions))
+            joint_vals = self.joint_rest_positions
             joints_ik = pb.get_ik_jac_pinv_ns(model=self.model_id, eef_link=self.eef_link,
                                               target=start, joint_ini=joint_vals, cmd_sec=self.joint_rest_positions,
                                               physicsClientId=self.sim_id, debug=False)
 
             goal_threshold = 0.03
             timeout = self.sim_time
-            [plan_joint, plan_cart] = self.get_plan(t_tensor(joints_ik), goal, self.model_id, self.eef_link, K, goal_threshold, timeout, self.obstacles, physicsClientId=self.sim_id)
+            [plan_joint, plan_cart] = self.get_plan(joints_ik, goal, self.model_id, self.eef_link, K,
+                                                    goal_threshold, timeout, self.obstacles, physicsClientId=self.sim_id)
 
             res = resample_trajectory(plan_cart, 1/self.timestep, self.sample_rate)
             trajs = torch.cat((trajs, res))
-            # trajs = torch.cat((trajs, torch.ones_like(res)))  # WARNING: Add the vector of standard deviations. Set manually to one.
 
         return trajs.view(len(z), -1)
 
@@ -185,10 +187,11 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
         state = pb.get_eef_position(model, eef_link, physicsClientId)
         self.controller.set_model(model, eef_link, physicsClientId)
         self.controller.set_obstacles(obstacles)
-        self.controller.Kp = np.array(controller_gains[0])
-        self.controller.Ki = np.array(controller_gains[1])
-        self.controller.Kd = np.array(controller_gains[2])
+        self.controller.ctrl.Kp = np.array(controller_gains[0])
+        self.controller.ctrl.Ki = np.array(controller_gains[1])
+        self.controller.ctrl.Kd = np.array(controller_gains[2])
         self.controller.Krep = np.array(controller_gains[3])
+        self.controller.ctrl.iClamp = np.array(controller_gains[4])
         control_action = self.controller.get_command(state, goal.detach().numpy())
         pb.execute_command(model=model, cmd=control_action,
                            cmd_type=self.controller.control_type,
@@ -253,7 +256,8 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
 
             t_ini = time.time()
             # Obtain current joint positions
-            joint_state = p.getJointStates(model, range(0, p.getNumJoints(model, physicsClientId=physicsClientId)), physicsClientId=physicsClientId)
+            joint_state = p.getJointStates(model, range(0, p.getNumJoints(model, physicsClientId=physicsClientId)),
+                                           physicsClientId=physicsClientId)
             for i in range(0, p.getNumJoints(model, physicsClientId=physicsClientId)):
                 joint_pos[i] = joint_state[i][0]
 
@@ -282,7 +286,8 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
                 for obj_id in debug_traj:
                     p.removeUserDebugItem(obj_id, physicsClientId=physicsClientId)
                 debug_traj = draw_trajectory(plan_cart.view(-1,3), [0, 1, 0], 4, physicsClientId=physicsClientId, draw_points=False)
-                debug_traj.append(p.addUserDebugText("t = %.2f" % self.current_time, [0, 0, 1.0], physicsClientId=physicsClientId))
+                if len(self.controller.ctrl.err_int) > 0:
+                    debug_traj.append(p.addUserDebugText("t = %.2f err_int=[%.2f,%.2f,%.2f]" % (self.current_time, self.controller.ctrl.err_int[0],self.controller.ctrl.err_int[1],self.controller.ctrl.err_int[2]), [0, 0, 1.0], physicsClientId=physicsClientId))
                 p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1)
                 # elapsed_time = time.time() - t_ini
                 # t_sleep = self.timestep - elapsed_time
