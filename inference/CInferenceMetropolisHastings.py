@@ -56,6 +56,7 @@ class CInferenceMetropolisHastings(CBaseInferenceAlgorithm):
         stats = dict()
 
         z = proposal
+        z_hat = z
         n_evals = 0
         samples = t_tensor([])
         likelihoods = np.array([])
@@ -69,7 +70,7 @@ class CInferenceMetropolisHastings(CBaseInferenceAlgorithm):
             n_evals = n_evals + 1
             # Sample from the proposal distribution a new value for the parameters
             tic = time.time()
-            z_hat[active_dim] = z[active_dim] + proposal_sampler[active_dim].sample(nsamples=1, params=None)
+            z_hat += proposal_sampler.sample(nsamples=1, params=None)
             # Limit the sample
             z_hat = torch.max(z_hat, z_min)
             z_hat = torch.min(z_hat, z_max)
@@ -102,8 +103,8 @@ class CInferenceMetropolisHastings(CBaseInferenceAlgorithm):
                 last_likelihood = likelihood_best
                 samples = torch.cat((samples, z.view(1, -1)))
                 likelihoods = np.vstack((likelihoods, likelihood.reshape(1, -1))) if likelihoods.size else likelihood.reshape(1, -1)
-                draw_point(z_hat.view(-1), [0, 1, 0], 0.02, physicsClientId=visualizer)
-                draw_trajectory(gen_obs.view(-1, 3), [0, 1, 0], physicsClientId=visualizer, draw_points=False)
+                # draw_point(z_hat.view(-1), [0, 1, 0], 0.02, physicsClientId=visualizer)
+                # draw_trajectory(gen_obs.view(-1, 3), [0, 1, 0], physicsClientId=visualizer, draw_points=False)
             # else:
             #     draw_point(z_hat.view(-1), [1, 0, 0], 0.01, physicsClientId=visualizer)
             # print("MCMC accepted samples:", len(samples))
