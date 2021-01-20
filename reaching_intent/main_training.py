@@ -67,11 +67,11 @@ train_learning_rate     = 1e-4
 
 minibatch_size          = 16
 
-activation              = torch.tanh
+activation              = torch.relu
 
 train_percentage        = 0.9
 
-nn_layers               = 4
+nn_layers               = 3
 
 loss_f                  = loss_MSE
 
@@ -79,7 +79,7 @@ noise_sigma             = 0.001  # Sigma of the multivariate normal used to add 
 
 load_existing_model = True
 
-nn_model_path = "pytorch_models/ne_fc4_10k_MSE_in%d_out%d.pt" % (input_dim, output_dim)
+nn_model_path = "pytorch_models/ne_fc%d_10k_MSE_in%d_out%d.pt" % (nn_layers, input_dim, output_dim)
 
 dataset_path = "datasets/default.dat"  # Small dataset for testing the approach
 
@@ -95,7 +95,7 @@ device = "cuda:0" if torch.cuda.is_available() else "cpu"
 neNEmulator = CGenerativeModelNeuralEmulator(nn_model_path)  # Neural emulator for the likelihood function
 
 # Check if there is a neural emulator model loaded. Create a new one otherwise.
-if not neNEmulator.model or not load_existing_model:
+if neNEmulator.model is None or not load_existing_model:
     neNEmulator.model = CNeuralEmulatorNN(torch.sum(latent_mask), output_dim, nn_layers, debug, device, activation, loss_f)
 else:
     neNEmulator.model.move_to_device(device)
@@ -104,6 +104,10 @@ neNEmulator.model.latent_mask = latent_mask
 neNEmulator.model.activation = activation
 neNEmulator.model.criterion = loss_f
 neNEmulator.model.debug = False
+neNEmulator.model.output_dim = output_dim
+neNEmulator.model.input_dim = input_dim
+neNEmulator.output_dims = output_dim
+neNEmulator.input_dims = input_dim
 
 
 if viz_debug:
@@ -146,10 +150,10 @@ while current_loss > train_loss_threshold:
     current_epoch = current_epoch + 1
     current_loss, loss_terms = neNEmulator.model.test(test_dataset)
     current_loss_train, loss_terms_train = neNEmulator.model.test(train_dataset)
-    print("Epoch: %d  train loss: %3.3f  test_loss: %3.3f  epoch_time: %3.3f total_time: %s" %
+    print("Epoch: %d  train loss: %7.5f  test_loss: %7.5f  epoch_time: %3.3f total_time: %s" %
           (current_epoch, current_loss_train, current_loss, train_time, str(datetime.timedelta(seconds=(time.time()-train_ini_time)))))
     # print('   loss terms: %3.5f\t%3.5f\t%3.5f\t%3.5f' % (loss_terms[0], loss_terms[1], loss_terms[2], loss_terms[3]))
-    str_status = "%d %3.3f %3.3f %3.3f %3.3f \n" % (current_epoch, current_loss_train, current_loss, train_time, time.time()-train_ini_time)
+    str_status = "%d %7.5f %7.5f %3.3f %3.3f \n" % (current_epoch, current_loss_train, current_loss, train_time, time.time()-train_ini_time)
     with open(nn_model_path + ".train_report.txt", "a+") as fp:
         fp.write(str_status)
 
@@ -159,7 +163,7 @@ while current_loss > train_loss_threshold:
 
         if viz_debug:
             # Compute and show a trajectory from the test dataset
-            sample_idx = np.random.random_integers(0, len(test_dataset)-1)
+            sample_idx = np.random.randint(0, len(test_dataset)-1)
             z = test_dataset.samples[sample_idx][0][latent_mask]
             p.removeAllUserDebugItems()
             traj_gen = neNEmulator.generate(z.to(neNEmulator.model.device).view(1,-1), n=None)[0]
@@ -169,11 +173,11 @@ while current_loss > train_loss_threshold:
             draw_trajectory_diff(traj_gen.view(-1, 3), traj_gt, color=[0, 0, 1], width=1, physicsClientId=neSimulator.sim_id)
             draw_point(z, [0, 0, 1], size=0.05, width=5, physicsClientId=neSimulator.sim_id)
             loss, loss_terms = neNEmulator.model.criterion(traj_gen.view(-1, 3), traj_gt)
-            draw_text("Test Gen: loss: %5.3f" % torch.sqrt(loss).mean().item(), traj_gen.view(-1, 3)[-1], neSimulator.sim_id, [1, 0, 0])
+            draw_text("Test Gen: loss: %7.5f" % torch.sqrt(loss).mean().item(), traj_gen.view(-1, 3)[-1], neSimulator.sim_id, [1, 0, 0])
             draw_text("Test GT", traj_gt[-1], neSimulator.sim_id, [0, 1, 0])
 
             # Compute and show a trajectory from the train dataset
-            sample_idx = np.random.random_integers(0, len(train_dataset)-1)
+            sample_idx = np.random.randint(0, len(train_dataset)-1)
             z = train_dataset.samples[sample_idx][0][latent_mask]
             traj_gen = neNEmulator.generate(z.to(neNEmulator.model.device).view(1,-1), n=None)[0]
 
@@ -182,7 +186,7 @@ while current_loss > train_loss_threshold:
             draw_trajectory(traj_gt, color=[0, 0.5, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
             draw_trajectory_diff(traj_gen.view(-1, 3), traj_gt, color=[1, 0, 1], width=1, physicsClientId=neSimulator.sim_id)
             loss, loss_terms = neNEmulator.model.criterion(traj_gen.view(-1, 3), traj_gt)
-            draw_text("Train Gen: loss: %5.3f" % torch.sqrt(loss).mean().item(), traj_gen.view(-1, 3)[-1], neSimulator.sim_id, [0.5, 0, 0])
+            draw_text("Train Gen: loss: %7.5f" % torch.sqrt(loss).mean().item(), traj_gen.view(-1, 3)[-1], neSimulator.sim_id, [0.5, 0, 0])
             draw_text("Train GT", traj_gt[-1], neSimulator.sim_id, [0, 0.5, 0])
 
             # # Take a screenshot each 100 epochs
