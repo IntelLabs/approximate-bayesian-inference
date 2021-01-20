@@ -1,9 +1,12 @@
+import time
 import json
 from common.common import *
 from samplers.CSamplerMultivariateNormal import CSamplerMultivariateNormal
 from neural_emulators.CDataset import CDataset
 from utils.misc import resample_trajectory
 
+#TODO: Implement lazy-dataset load. Reserve the space but only parse the trajectory when first accessed.
+#TODO: Trace and implement properly x_samples and y_samples
 
 class CReachingDataset(CDataset):
     def __init__(self, filename, noise_sigma=0.0, dataset_sample_rate=30, output_sample_rate=30, ndims=3, n_datapoints=-1):
@@ -17,6 +20,9 @@ class CReachingDataset(CDataset):
     def dataset_load(self, noise_sigma=0.001, ndims=3, dataset_sample_rate=30, output_sample_rate=30,
                      prefix_samples=4, trajectory_duration=5.0, n_datapoints=-1):
 
+        t_ini = time.time()
+        print("Loading trajectories from %s" % len(self.filename))
+
         try:
             file = open(self.filename, 'r')
         except FileNotFoundError:
@@ -28,8 +34,15 @@ class CReachingDataset(CDataset):
             for _ in range(n_datapoints):
                 lines.append(file.readline())
 
+        print("Loaded file in %.3f. Processing %d trajectories..." % ((time.time() - t_ini), len(lines)))
+
+        # TODO: Compute and check that memory requirements
+
+        # TODO: Prepare memory for the trajectories and avoid append and cat
+
         # Load samples into two batched tensors of inputs and outputs
-        for l in lines:
+        for idx,l in enumerate(lines):
+            t_traj = time.time()
             sample = json.loads(l)
 
             traj_len = len(sample[1]) / 2  # Crop the stdev part of the trajectory
@@ -56,6 +69,9 @@ class CReachingDataset(CDataset):
             self.x_samples = torch.cat((self.x_samples, in_params.view(1, -1)))
             self.y_samples = torch.cat((self.y_samples, out_params.view(1, -1)))
             self.samples.append([in_params.view(-1), out_params.view(-1)])
+            if idx % 100 == 0:
+                print("Progress %d / %d. Time per traj: %.3fs ETA in: %.3fs" %
+                      (idx, len(lines), time.time()-t_traj, (len(lines) - idx) * (time.time()-t_traj)))
 
-        print("Loaded %d trajectories" % len(self.x_samples))
+        print("Loaded %d trajectories. Took %.3f s" % (len(self.x_samples), time.time()-t_ini))
         return self.samples
