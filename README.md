@@ -20,7 +20,7 @@ Dependencies
     - numpy
     - json
     - sampling-algorithms
-    
+
 - Neural emulators
     - pytorch
     - bayesian-layers
@@ -114,6 +114,7 @@ Contributors
 
 References
 ==========
-- Felip, J., Ahuja, N., Gómez-Gutiérrez, D., Tickoo, O., & Mansinghka, V. (2019). Real-time Approximate Bayesian Computation for Scene Understanding. arXiv preprint arXiv:1905.13307.
+- Felip, J., Ahuja, N., Gómez-Gutiérrez, D., Tickoo, O., & Mansinghka, V. (2019). Real-time Approximate Bayesian 
+Computation for Scene Understanding. arXiv preprint arXiv:1905.13307.
 
 Last updated: Jun 2020

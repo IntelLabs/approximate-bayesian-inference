@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-python3 main_datageneration.py datasets/test0.dat 10000 1000 &
-python3 main_datageneration.py datasets/test1.dat 10000 1000 &
-python3 main_datageneration.py datasets/test2.dat 10000 1000 &
-python3 main_datageneration.py datasets/test3.dat 10000 1000 &
-python3 main_datageneration.py datasets/test4.dat 10000 1000 &
-python3 main_datageneration.py datasets/test5.dat 10000 1000 &
-python3 main_datageneration.py datasets/test6.dat 10000 1000 &
-python3 main_datageneration.py datasets/test7.dat 10000 1000 &
-python3 main_datageneration.py datasets/test8.dat 10000 1000 &
-python3 main_datageneration.py datasets/test9.dat 10000 1000 &
+python3.7 main_datageneration.py datasets/test0.dat 10000 1000 &
+python3.7 main_datageneration.py datasets/test1.dat 10000 1000 &
+python3.7 main_datageneration.py datasets/test2.dat 10000 1000 &
+python3.7 main_datageneration.py datasets/test3.dat 10000 1000 &
+python3.7 main_datageneration.py datasets/test4.dat 10000 1000 &
+python3.7 main_datageneration.py datasets/test5.dat 10000 1000 &
+python3.7 main_datageneration.py datasets/test6.dat 10000 1000 &
+python3.7 main_datageneration.py datasets/test7.dat 10000 1000 &
+python3.7 main_datageneration.py datasets/test8.dat 10000 1000 &
+python3.7 main_datageneration.py datasets/test9.dat 10000 1000 &
 
 wait
 
