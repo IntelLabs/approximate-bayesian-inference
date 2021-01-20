@@ -17,8 +17,8 @@ from reaching_intent.generative_models.CGenerativeModelSimulator import create_s
 
 if __name__ == "__main__":
     # Generative model parameter limits: start volume (x,y,z), end volume (x,y,z), controller(Kp,Ki,Kd,Krep,iClamp)
-    param_limits_min = t_tensor([-0.05, 0.30, -0.10, 0.25, -0.4, 0.20, 5, 0.005, 0, 0.10, 20])
-    param_limits_max = t_tensor([-0.04, 0.31, -0.09, 0.90, 0.4, 0.21, 20, 0.010, 0, 0.11, 30])
+    param_limits_min = t_tensor([-0.06, 0.30, -0.10, 0.25, -0.4, 0.20, 1, 0.0, 0, 0.10, 0])
+    param_limits_max = t_tensor([-0.05, 0.31, -0.09, 0.90, 0.4, 0.21, 10, 1.0, 10, 0.35, 2])
 
     # Sampler to sample parameter values to generate trajectories
     param_sampler = CSamplerUniform({"min": param_limits_min, "max": param_limits_max})
@@ -32,15 +32,16 @@ if __name__ == "__main__":
 
     # Simulator used to generate synthetic data
     neSimulator = CGenerativeModelSimulator(simulator_params)
+    p.configureDebugVisualizer(p.GUI, True)
 
     # Simulated arm controller parameters
     controller_params = dict()
-    Kp, Ki, Kd, Krep, iClamp = 20, 0.010, 0, 0.11, 30
-    controller_params["Kp"] = p.addUserDebugParameter(paramName="Kp", rangeMin=0.0, rangeMax=100.0, startValue=Kp, physicsClientId=neSimulator.sim_id)
+    Kp, Ki, Kd, Krep, iClamp = 5, 0.001, 1, 0.2, 2
+    controller_params["Kp"] = p.addUserDebugParameter(paramName="Kp", rangeMin=0.0, rangeMax=10.0, startValue=Kp, physicsClientId=neSimulator.sim_id)
     controller_params["Kd"] = p.addUserDebugParameter(paramName="Kd", rangeMin=0.0, rangeMax=10.0, startValue=Kd, physicsClientId=neSimulator.sim_id)
-    controller_params["Ki"] = p.addUserDebugParameter(paramName="Ki", rangeMin=0.0, rangeMax=10.0, startValue=Ki, physicsClientId=neSimulator.sim_id)
-    controller_params["iClamp"] = p.addUserDebugParameter(paramName="iClamp", rangeMin=0.0, rangeMax=100.0, startValue=iClamp, physicsClientId=neSimulator.sim_id)
-    controller_params["Krep"] = p.addUserDebugParameter(paramName="Krep", rangeMin=0.0, rangeMax=10.0, startValue=Krep, physicsClientId=neSimulator.sim_id)
+    controller_params["Ki"] = p.addUserDebugParameter(paramName="Ki", rangeMin=0.0, rangeMax=1.0, startValue=Ki, physicsClientId=neSimulator.sim_id)
+    controller_params["iClamp"] = p.addUserDebugParameter(paramName="iClamp", rangeMin=0.0, rangeMax=10.0, startValue=iClamp, physicsClientId=neSimulator.sim_id)
+    controller_params["Krep"] = p.addUserDebugParameter(paramName="Krep", rangeMin=0.0, rangeMax=1.0, startValue=Krep, physicsClientId=neSimulator.sim_id)
 
     while p.isConnected(physicsClientId=neSimulator.sim_id):
         Kp = p.readUserDebugParameter(controller_params["Kp"], physicsClientId=neSimulator.sim_id)
@@ -53,7 +54,7 @@ if __name__ == "__main__":
         params = param_sampler.sample(1, None)
 
         # Fix the nuisance parameters to the GUI input parameters
-        params[:, nuisance_mask] = [Kp, Ki, Kd, Krep, iClamp]
+        params[:,6:] = t_tensor([Kp, Ki, Kd, Krep, iClamp])
 
         # Generate a trajectory
-        generated = neSimulator.generate(params[:, latent_mask], params[:, nuisance_mask])
+        generated = neSimulator.generate(params[:,latent_mask], params[:,nuisance_mask])

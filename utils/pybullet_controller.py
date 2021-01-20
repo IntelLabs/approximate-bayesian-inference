@@ -1,5 +1,7 @@
 import numpy as np
 import pybullet
+from utils.draw import draw_line
+from utils.pybullet_utils import get_eef_pose
 
 
 class CController(object):
@@ -167,8 +169,14 @@ class CPotentialFieldController(CController):
         # Obtain closest points from the end effector to the obstacles
         points = []
         for body in self.obstacles:
-            closest_points = pybullet.getClosestPoints(bodyA=self.model, bodyB=body, distance=self.max_dist,
-                                                       linkIndexA=self.eef_link, linkIndexB=-1, physicsClientId=self.sim_id)
+            closest_points = list(pybullet.getClosestPoints(bodyA=self.model, bodyB=body, distance=self.max_dist,
+                                                       linkIndexA=self.eef_link, linkIndexB=-1, physicsClientId=self.sim_id))
+            closest_points.extend(pybullet.getClosestPoints(bodyA=self.model, bodyB=body, distance=self.max_dist,
+                                                            linkIndexA=self.eef_link-1, linkIndexB=-1,
+                                                            physicsClientId=self.sim_id))
+            # closest_points.extend(pybullet.getClosestPoints(bodyA=self.model, bodyB=body, distance=self.max_dist,
+            #                                                 linkIndexA=self.eef_link-2, linkIndexB=-1,
+            #                                                 physicsClientId=self.sim_id))
             if len(closest_points) > 0:
                 points.extend(closest_points)
 
@@ -178,12 +186,25 @@ class CPotentialFieldController(CController):
             cdir = np.array(cpoint[6]) - np.array(cpoint[5])
             cdir = cdir / np.linalg.norm(cdir)
             dist = cpoint[8]
-            cmd_rep = cmd_rep + cdir * (1/(dist*dist))
+            cmd_rep -= cdir * (1/dist*dist)
+            # draw_line(cpoint[6], cpoint[5], lifetime=1)
+
+        cmd_rep[2] = abs(cmd_rep[2]) + .1
+        # cmd_rep /= len(points)
 
         cmd_pid = self.ctrl.get_command(state, ref)
         self.err = self.ctrl.err
 
-        return cmd_pid + self.Krep * cmd_rep * np.array([1,1,0.1])
+
+        # print("PID action: ", cmd_pid)
+        pose = get_eef_pose(self.model, self.eef_link, self.sim_id)
+        draw_line(pose[0:3] + cmd_pid * .1, pose[0:3], lifetime=.1, color=[0, 1, 0])
+
+        # print("Force Field action: ", cmd_rep)
+        if len(points) > 0:
+            draw_line(pose[0:3] + cmd_rep * self.Krep * .1, pose[0:3], lifetime=.1, color=[1,0,0])
+
+        return cmd_pid + self.Krep * cmd_rep
 
     def reset(self):
         """
