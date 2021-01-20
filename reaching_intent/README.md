@@ -3,6 +3,31 @@ Problem definition
 Predict the 3D goal position of a single-arm reaching movement performed by a human using a partially observed 
 hand trajectory.
 
+Getting started
+------------------
+The follow the next steps in order to have the neural surrogate generative model inference pipeline ready. All the
+main files have a header function with tunable parameters. 
+
+1- Generate a trajectory dataset. (Default dataset is a toy dataset, a 10K+ dataset is recommended)
+    1.1 - Optional. Tune the arm controller limits and explore the effects of the different controller parameters 
+            with arm_controller_tuining_gui.py
+    1.2 - Generate a dataset with the simulator using main_datageneration.py. It is possible to run multiple instances
+            to generate trajectories concurrently and merge the datasets. See scripts/generate_10K_multithread.sh
+    1.3 - Optional. Check that the dataset trajectories look alright with main_viewer_dataset.py                
+      
+2- Train the neural surrogate. 
+    2.1 Using main_training.py. Configure network architecture and observation parameters to match the generated data.
+    2.2 Optional: Check trajectory generation makes sense with main_viewer_neural_emulator.py
+
+3- Run inference. Can be configured with: 
+    3.1 - Generative model to use. Currently avaliable: simulator, neural surrogate.
+    3.2 - Sampling algorithm. Currently avaliable: Grid or MCMC Metropolis-Hastings.
+    3.3 - Observation model. Currently available: 
+        3.3.1 - Simulator: Samples a random point in the parameter space and generates a trajectory.
+        3.3.1 - Random sample a trajectory from a dataset.
+    3.4 - Prior distribution. This can be any distribution that implements sampling and log_prob methods.
+    3.5 - Parameter domain boundaries for target quantities z ∋ ℝ^3 and and nuisance quantities n ∋ ℝ^8. Other
+        relevant parameters like slack, prediction time window and sampling rate.
 
 Definitions
 -----------
@@ -18,12 +43,12 @@ Definitions
 
 Generative model
 ----------------
-Describe the simulator.
+Describe the simulator. In the meantime see the paper.
 
 
 Likelihood function
 -------------------
-Describe how observations and synthetic observations are compared.
+Describe how observations and synthetic observations are compared. In the meantime see the paper.
 
 
 Future work
