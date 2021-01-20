@@ -2,11 +2,13 @@
 import numpy as np
 from matplotlib import pyplot as plt
 
-file = "/home/labuser/workspace/approximate-bayesian-inference/reaching_intent/pytorch_models/ne_bfc4_10k_MSE_in11_out450.pt.train_report.txt"
+files = ["/home/jfelip/workspace/approximate-bayesian-inference/reaching_intent/pytorch_models/ne_fc4_10k_MSE_in11_out450.pt.train_report.txt",
+         "/home/jfelip/workspace/approximate-bayesian-inference/reaching_intent/pytorch_models/ne_fc3_10k_MSE_in11_out450.pt.train_report.txt"]
 
-data = np.loadtxt(file)
+for file in files:
+    data = np.loadtxt(file)
+    plt.plot(data[:, 1], label="train_%s" % file.split("/")[-1])
+    plt.plot(data[:, 2], label="test_%s" % file.split("/")[-1])
 
-plt.plot(data[:, 0], data[:, 1], label="train")
-plt.plot(data[:, 0], data[:, 2], label="test")
 plt.legend()
 plt.show()
