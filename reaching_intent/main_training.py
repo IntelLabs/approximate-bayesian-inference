@@ -59,7 +59,7 @@ nuisance_mask = latent_mask == 0  # The rest of the params are considered nuisan
 
 output_dim              = n_points * n_dims  # x = [xt,xt+1,..., xt+k]
 
-train_loss_threshold    = -3000
+train_loss_threshold    = 0.002
 
 train_epochs            = 1
 
@@ -81,7 +81,7 @@ load_existing_model = True
 
 nn_model_path = "pytorch_models/ne_fc%d_10k_MSE_in%d_out%d.pt" % (nn_layers, input_dim, output_dim)
 
-dataset_path = "datasets/default.dat"  # Small dataset for testing the approach
+dataset_path = "datasets/dataset10K.dat"  # Small dataset for testing the approach
 
 debug = False
 
