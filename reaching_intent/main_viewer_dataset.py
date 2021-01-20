@@ -6,7 +6,6 @@ import numpy as np
 from reaching_intent.generative_models.CGenerativeModelSimulator import CGenerativeModelSimulator
 from utils.draw import draw_trajectory
 from utils.draw import draw_text
-from utils.draw import draw_point
 from reaching_intent.generative_models.CReachingDataset import CReachingDataset
 
 
