@@ -38,7 +38,7 @@ if __name__ == "__main__":
 
     # Select the parameters that are considered nuisance and the parameters that are considered interesting
     latent_mask = t_tensor([0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0]) == 1  # We are interested in the end position
-    nuisance_mask = t_tensor([0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0]) == 0  # The rest of the params are considered nuisance
+    nuisance_mask = t_tensor([1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1]) == 1  # The rest of the params are considered nuisance
 
     # Latent space
     z_min = param_limits_min[latent_mask]
@@ -90,6 +90,7 @@ if __name__ == "__main__":
     #################################################################################
     # OBSERVATION MODEL
     #################################################################################
+    # TODO: Get data from an independent dataset not used for training
     print("Prepare observation model")
     observer_params = copy.deepcopy(simulator_params)
     observer_params["sigma"] = 0.001  # Additional gaussian noise added to observed trajectories
