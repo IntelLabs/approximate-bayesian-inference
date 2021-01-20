@@ -49,7 +49,7 @@ latent_mask = t_tensor([0,0,0,1,1,1,0,0,0,0,0]) == 1    # We are interested in t
 nuisance_mask = t_tensor([0,0,0,1,1,1,0,0,0,0,0]) == 0  # The rest of the parameters are considered nuisance
 
 # Neural emulator path
-nn_model_path = "pytorch_models/ne_fc4_10k_MSE_in11_out450.pt"
+nn_model_path = "pytorch_models/ne_fc3_10k_MSE_in11_out450.pt"
 ###################################
 
 
