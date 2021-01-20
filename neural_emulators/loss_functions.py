@@ -47,7 +47,7 @@ def loss_MSE(z, x):
 
     diff = (x - fz)
 
-    term3 = torch.sum((diff*diff), 1)
+    term3 = torch.mean((diff*diff), 1)
 
     loss = term3
 
