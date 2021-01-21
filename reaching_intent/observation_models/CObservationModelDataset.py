@@ -37,6 +37,7 @@ class CObservationModelDataset(CBaseObservationModel):
             self.traj_idx = int((torch.rand(1) * len(self.dataset)).item())
         else:
             self.traj_idx = idx
+        print("Observation trajectory. Selected traj idx: %d" % self.traj_idx)
         self.traj = self.dataset.y_samples[self.traj_idx]
         self.idx = self.min_points
         self.goal = self.dataset.x_samples[self.traj_idx]

@@ -13,7 +13,9 @@ from reaching_intent.observation_models.CObservationModelDataset import CObserva
 from neural_emulators.loss_functions import log_likelihood_slacks as likelihood_f
 from spaces.ContinousSpace import ContinousSpace
 from utils.draw import draw_trajectory
+from utils.draw import draw_trajectory_diff
 from utils.draw import draw_point
+from utils.pybullet_utils import set_eef_position
 
 from inference.CInferenceMetropolisHastings import CInferenceMetropolisHastings
 from inference.CInferenceGrid import CInferenceGrid
@@ -94,7 +96,7 @@ if __name__ == "__main__":
     print("Prepare observation model")
     observer_params = copy.deepcopy(simulator_params)
     observer_params["sigma"] = 0.001  # Additional gaussian noise added to observed trajectories
-    observer_params["dataset_path"] = "./datasets/default.dat"
+    observer_params["dataset_path"] = "./datasets/dataset10K.dat"
     observer_params["min_points"] = 3
     observer_params["obs_dimensions"] = 3
     observer_params["num_trajs"] = 100
@@ -154,7 +156,7 @@ if __name__ == "__main__":
 
     # Draw ground truth
     if visualizer is not None:
-        draw_trajectory(obs_model.traj.view(-1, n_dims), draw_points=False, physicsClientId=visualizer)
+        draw_trajectory(obs_model.traj.view(-1, n_dims), color=[0, 1, 0], draw_points=False, physicsClientId=visualizer)
         draw_point(obs_model.get_ground_truth()[latent_mask], [0, 1, 0], size=0.05, width=5, physicsClientId=visualizer)
 
     #################################################################################
@@ -165,6 +167,7 @@ if __name__ == "__main__":
     while obs_model.is_ready():
         # Obtain observation and initialize latent space and nuisance values from their priors
         o = obs_model.get_observation()
+        set_eef_position(o[-n_dims:], gen_model_sim.model_id, gen_model_sim.eef_link, physicsClientId=visualizer)
         z = prior_distribution.sample(1, None)
         n = nuisance_sampler.sample(1, None)
 
@@ -176,7 +179,7 @@ if __name__ == "__main__":
             for viz_item in viz_items:
                 pybullet.removeUserDebugItem(viz_item, physicsClientId=visualizer)
             viz_items.extend(
-                draw_trajectory(o.view(-1, n_dims), draw_points=True, width=3.0, color=[1, 0, 1],
+                draw_trajectory(o.view(-1, n_dims), draw_points=False, width=8.0, color=[1, 0, 1],
                                 physicsClientId=visualizer)
             )
 
@@ -222,6 +225,11 @@ if __name__ == "__main__":
             #     viz_items.extend(draw_point(s, [0, 0, 1], size=0.01, width=2, physicsClientId=visualizer, lifetime=1.0))
             #     draw_point(s, [0, 0, 1], size=0.01, width=2, physicsClientId=visualizer, lifetime=10.0)
             viz_items.extend(draw_point(MAP_z, [1, 0, 0], size=0.05, width=5, physicsClientId=visualizer))
+            # Draw generated trajectory for the GT point
+            gen_traj = gen_model.generate(MAP_z.view(1, -1), n.view(1, -1))
+            viz_items.extend(draw_trajectory(gen_traj.view(-1, n_dims), [1, 0, 0], draw_points=False, width=5))
+            viz_items.extend(draw_trajectory_diff(obs_model.traj.view(-1, n_dims), gen_traj.view(-1, n_dims), [0, 0, .8], width=1))
+
         time.sleep(0.1)
 
         iteration = iteration + 1
