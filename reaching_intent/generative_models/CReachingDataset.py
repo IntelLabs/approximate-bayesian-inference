@@ -21,7 +21,7 @@ class CReachingDataset(CDataset):
                      prefix_samples=4, trajectory_duration=5.0, n_datapoints=-1):
 
         t_ini = time.time()
-        print("Loading trajectories from %s" % len(self.filename))
+        print("Loading trajectories from %s" % self.filename)
 
         try:
             file = open(self.filename, 'r')
