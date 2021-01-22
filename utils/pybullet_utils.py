@@ -193,6 +193,11 @@ def get_eef_position(model, eef_link, physicsClientId):
     return res[0]
 
 
+def set_eef_position(pose, model, eef_link, physicsClientId):
+    joints = get_ik_solutions(model, eef_link, pose[0:3], physicsClientId)
+    set_joint_angles(model, joints, physicsClientId)
+
+
 def get_eef_orientation(model, eef_link, physicsClientId):
     res = p.getLinkState(model, eef_link, physicsClientId=physicsClientId)
     return res[1]
