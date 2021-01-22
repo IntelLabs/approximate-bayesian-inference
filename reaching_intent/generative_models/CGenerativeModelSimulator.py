@@ -91,7 +91,8 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
 
         # Set the resting position for each joint
         joint_indices = pb.get_actuable_joint_indices(self.model_id, self.sim_id)
-        joint_rest_positions = t_tensor(torch.zeros(len(joint_indices)))
+        # joint_rest_positions = t_tensor(torch.zeros(len(joint_indices)))
+        joint_rest_positions = np.zeros(len(joint_indices))
         joint_rest_positions[5] = -.5  # Elbow at 60 deg
         joint_rest_positions[6] = 1.57   # Palm down
         self.joint_rest_positions = joint_rest_positions
