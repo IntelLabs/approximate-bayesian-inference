@@ -44,48 +44,59 @@ from utils.draw import draw_text
 sample_rate = 30    # Sensor sampling rate
 sim_time = 5        # Prediction time window in seconds
 n_dims = 3          # Point dimensionality
-n_points = sample_rate * sim_time
+n_points = sample_rate * sim_time  # Number of points in sequence that compose a trajectory
+debug = False       # Print verbose debug to stdout
+viz_debug = False   # Show 3D visualization debug of the training process
 ###################################
 
-
 ###################################
-# GENERIC NN PARAMETERS
+# GENERIC NEURAL SURROGATE ARCHITECTURE PARAMS
 ###################################
-input_dim               = n_dims + n_dims + 5  # Start point, End point, controller params
+# Neural surrogate input dimensions: Start point, End point, controller params
+input_dim = n_dims + n_dims + 5
 
 # Select the parameters that are considered nuisance and the parameters that are considered interesting
 latent_mask = t_tensor([0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0]) == 1  # We are interested in the end position
 nuisance_mask = latent_mask == 0  # The rest of the params are considered nuisance
 
-output_dim              = n_points * n_dims  # x = [xt,xt+1,..., xt+k]
+# Dimensionality of the output. In this case it depends on the number of points that describe a trajectory (n_points)
+# and the dimensionality of each trajectory point (n_dims)
+output_dim = n_points * n_dims
 
-train_loss_threshold    = 0.002
+# Neural Surrogate architecture description
+activation = torch.relu
+nn_layers = 3
+loss_f = loss_MSE
 
-train_epochs            = 1
-
-train_learning_rate     = 1e-4
-
-minibatch_size          = 16
-
-activation              = torch.relu
-
-train_percentage        = 0.9
-
-nn_layers               = 3
-
-loss_f                  = loss_MSE
-
-noise_sigma             = 0.001  # Sigma of the multivariate normal used to add noise to the ground truth position read from the simulator
-
-load_existing_model = True
-
+# Model filename
 nn_model_path = "pytorch_models/ne_fc%d_10k_MSE_in%d_out%d.pt" % (nn_layers, input_dim, output_dim)
 
-dataset_path = "datasets/dataset10K.dat"  # Small dataset for testing the approach
 
-debug = False
+###################################
+# GENERIC TRAINING PARAMETERS
+###################################
+# True = Load an existing model (if exists) and resume training.
+load_existing_model = True
 
-viz_debug = True
+# Dataset to use
+dataset_path = "datasets/dataset10K.dat"
+# Portion (0. - 1.) of the dataset used for training. The remainder will be used for testing.
+train_percentage = 0.9
+
+# Training stops once the loss is below the threshold or the max_train_epochs are reached
+train_loss_threshold = 0.002
+max_train_epochs = 100
+
+# controls the number of times that the training dataset is gone over on each train call
+train_epochs = 1
+
+train_learning_rate = 1e-4
+
+minibatch_size = 16
+
+# Sigma of the multivariate normal used to add noise to the ground truth position read from the simulator
+noise_sigma = 0.0001
+
 
 ###############
 # GENERIC CODE
@@ -134,20 +145,21 @@ print("Loaded dataset with %d data points. took: %.3f" % (len(dataset), time.tim
 
 # Show some random trajectories from the dataset
 if viz_debug:
-    for i in range(10):
+    for i in range(5):
         idx = int((torch.rand(1) * len(dataset)).item())
         dataset_traj = dataset.samples[idx][1]
-        draw_trajectory(dataset_traj.view(-1,3), color=[1, 1, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
+        draw_trajectory(dataset_traj.view(-1,3), color=[1, 1, 0], width=2, draw_points=True,
+                        physicsClientId=neSimulator.sim_id)
 
 train_time = time.time()
 train_ini_time = time.time()
 current_epoch = 0
 current_loss = train_loss_threshold + 1
-while current_loss > train_loss_threshold:
+while current_loss > train_loss_threshold and max_train_epochs > current_epoch:
     train_time = time.time()
     neNEmulator.model.train(train_dataset, train_epochs, train_learning_rate, minibatch_size)
     train_time = time.time() - train_time
-    current_epoch = current_epoch + 1
+    current_epoch = current_epoch + train_epochs
     current_loss, loss_terms = neNEmulator.model.test(test_dataset)
     current_loss_train, loss_terms_train = neNEmulator.model.test(train_dataset)
     print("Epoch: %d  train loss: %7.5f  test_loss: %7.5f  epoch_time: %3.3f total_time: %s" %
