@@ -38,8 +38,8 @@ def create_sim_params(sim_viz=True, sim_timestep=0.01, sim_time=5.0,
     Kd = 0
     Ki = 0.01
     iClamp = 2.0
-    Krep = 0.1
-    PIDcontroller = pbc.CPIDController(Kp=Kp, Kd=Kd, Ki=Ki, iClamp=iClamp)  # Controller to be used
+    Krep = 150
+    PIDcontroller = pbc.CPIDController(Kp=Kp, Ki=Ki, Kd=Kd, iClamp=iClamp)  # Controller to be used
     controller = pbc.CPotentialFieldController(Krep=Krep, ctrl=PIDcontroller)
     simulator_params["robot_controller"] = controller
 
@@ -194,14 +194,22 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
         return output_cart
 
     def step_plan_potential_field(self, model, goal, eef_link, obstacles, controller_gains, physicsClientId=0):
+        """
+        :param model: Pybullet ID of the model that will be used for the plan
+        :param goal: 3D or 6D point/pose which is the target for the end effector
+        :param eef_link: Index of the end effector link to use as the planning endpoint and end of the kinematic chain.
+        :param obstacles: List of pybullet id with obstacles to be considered by the force field
+        :param controller_gains: [Kp, Ki, Kd, iClamp, Krep]
+        :param physicsClientId: Pybullet client ID.
+        """
         state = pb.get_eef_position(model, eef_link, physicsClientId)
         self.controller.set_model(model, eef_link, physicsClientId)
         self.controller.set_obstacles(obstacles)
         self.controller.ctrl.Kp = np.array(controller_gains[0])
         self.controller.ctrl.Ki = np.array(controller_gains[1])
         self.controller.ctrl.Kd = np.array(controller_gains[2])
-        self.controller.Krep = np.array(controller_gains[3])
-        self.controller.ctrl.iClamp = np.array(controller_gains[4])
+        self.controller.ctrl.iClamp = np.array(controller_gains[3])
+        self.controller.Krep = np.array(controller_gains[4])
         control_action = self.controller.get_command(state, goal.detach().numpy())
         pb.execute_command(model=model, cmd=control_action,
                            cmd_type=self.controller.control_type,
@@ -247,8 +255,11 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
 
         if self.visualize:
             p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0)
-            debug_objs = [p.addUserDebugText("k = " + str(K), [0, 0, 1.05], physicsClientId=physicsClientId)]
-            debug_objs.extend(draw_point(goal[0:3], [1,0,0], size=0.1, width=3, physicsClientId=physicsClientId))
+            debug_objs = [p.addUserDebugText("Kp: %.3f Ki: %.3f Kd: %.3f iClamp: %.3f Krep: %.3f" %
+                                             (K[0], K[1], K[2], K[3], K[4]), [0, 0, 1.05],
+                                             physicsClientId=physicsClientId)]
+
+            debug_objs.extend(draw_point(goal[0:3], [1, 0, 0], size=0.1, width=3, physicsClientId=physicsClientId))
             debug_traj = []
             p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1)
 

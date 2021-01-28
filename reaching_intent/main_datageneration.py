@@ -41,9 +41,9 @@ if len(sys.argv) > 3:
 sim_viz = True     # Visualize the generation process
 sample_rate = 30    # Samples per second
 
-# Generative model parameter limits: start volume (x,y,z), end volume (x,y,z), controller(Kp,Ki,Kd,Krep,iClamp)
-param_limits_min = t_tensor([-0.06, 0.30, -0.10, 0.25, -0.4, 0.20, 1, 0.0, 0, 5.0, 0])
-param_limits_max = t_tensor([-0.05, 0.31, -0.09, 0.90, 0.4, 0.21, 10, 1.0, 10, 30.0, 2])
+# Generative model parameter limits: start volume (x,y,z), end volume (x,y,z), controller(Kp,Ki,Kd,iClamp,Krep)
+param_limits_min = t_tensor([-0.06, 0.30, -0.10, 0.25, -0.4, 0.20, 5, 0.0, 0, 0, 90.0])
+param_limits_max = t_tensor([-0.05, 0.31, -0.09, 0.90, 0.4, 0.60, 20, 0.01, 1.0, 2, 100.0])
 
 # Select the parameters that are considered nuisance and the parameters that are considered interesting
 latent_mask = t_tensor([0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0]) == 1    # We are interested in the end position
@@ -55,15 +55,15 @@ gen_model_params = create_sim_params(sim_viz=sim_viz,
                                      model_path="pybullet_models/human_torso/model.urdf")
 
 # Add some objects to the scene
-gen_model_params["objects"]["path"].append("pybullet_models/duck/duck_vhacd.urdf")
-gen_model_params["objects"]["pos"].append([0.6, 0.1, 0.14])
-gen_model_params["objects"]["rot"].append([0., 0, 0., 1])
-gen_model_params["objects"]["static"].append(False)
-
-gen_model_params["objects"]["path"].append("pybullet_models/duck/duck_vhacd.urdf")
-gen_model_params["objects"]["pos"].append([0.4, -0.2, 0.14])
-gen_model_params["objects"]["rot"].append([0., 0, 1., 0])
-gen_model_params["objects"]["static"].append(False)
+# gen_model_params["objects"]["path"].append("pybullet_models/duck/duck_vhacd.urdf")
+# gen_model_params["objects"]["pos"].append([0.6, 0.1, 0.14])
+# gen_model_params["objects"]["rot"].append([0., 0, 0., 1])
+# gen_model_params["objects"]["static"].append(False)
+#
+# gen_model_params["objects"]["path"].append("pybullet_models/duck/duck_vhacd.urdf")
+# gen_model_params["objects"]["pos"].append([0.4, -0.2, 0.14])
+# gen_model_params["objects"]["rot"].append([0., 0, 1., 0])
+# gen_model_params["objects"]["static"].append(False)
 ###################################
 
 
