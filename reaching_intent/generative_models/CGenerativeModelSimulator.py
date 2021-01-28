@@ -118,7 +118,8 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
         self.obstacles = []
         for i in range(len(self.objects_path)):
             self.obstacles.append(p.loadURDF(self.objects_path[i], useFixedBase=self.objects_static[i],
-                                             basePosition=self.objects_pose[i], physicsClientId=self.sim_id))
+                                             basePosition=self.objects_pos[i], baseOrientation=self.objects_rot[i],
+                                             physicsClientId=self.sim_id))
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1)
         self.current_time = 0
 
