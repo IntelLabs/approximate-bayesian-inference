@@ -24,7 +24,8 @@ def create_sim_params(sim_viz=True, sim_timestep=0.01, sim_time=5.0,
     simulator_params["sim_id"] = 0
     simulator_objects = dict()
     simulator_objects["path"] = ["pybullet_models/table/table.urdf"]
-    simulator_objects["pose"] = [[0.6, 0, -0.65]]
+    simulator_objects["pos"] = [[0.6, 0, -0.65]]
+    simulator_objects["rot"] = [[0, 0, 0, 1]]
     simulator_objects["static"] = [True]
     simulator_params["objects"] = simulator_objects
 
@@ -32,7 +33,7 @@ def create_sim_params(sim_viz=True, sim_timestep=0.01, sim_time=5.0,
     Kp = 10
     Kd = 0
     Ki = 0.01
-    iClamp = 25.0
+    iClamp = 2.0
     Krep = 0.1
     PIDcontroller = pbc.CPIDController(Kp=Kp, Kd=Kd, Ki=Ki, iClamp=iClamp)  # Controller to be used
     controller = pbc.CPotentialFieldController(Krep=Krep, ctrl=PIDcontroller)
@@ -57,7 +58,8 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
         self.obstacles = []
         self.objects_path = sim_params["objects"]["path"]
         self.objects_static = sim_params["objects"]["static"]
-        self.objects_pose = sim_params["objects"]["pose"]
+        self.objects_pos = sim_params["objects"]["pos"]
+        self.objects_rot = sim_params["objects"]["rot"]
         self.controller = sim_params["robot_controller"]
         self.model = self.Model(self.generate, 4, self.sim_time * self.sample_rate * 3, self.device)
         self.coll_disable_pairs = []
@@ -85,7 +87,8 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
 
         for i in range(len(self.objects_path)):
             self.obstacles.append(p.loadURDF(self.objects_path[i], useFixedBase=self.objects_static[i],
-                                             basePosition=self.objects_pose[i], physicsClientId=self.sim_id))
+                                             basePosition=self.objects_pos[i], baseOrientation=self.objects_rot[i],
+                                             physicsClientId=self.sim_id))
 
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1)
 

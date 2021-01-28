@@ -5,8 +5,9 @@ from samplers.CSamplerMultivariateNormal import CSamplerMultivariateNormal
 from neural_emulators.CDataset import CDataset
 from utils.misc import resample_trajectory
 
-#TODO: Implement lazy-dataset load. Reserve the space but only parse the trajectory when first accessed.
-#TODO: Trace and implement properly x_samples and y_samples
+# TODO: Implement lazy-dataset load. Reserve the space but only parse the trajectory when first accessed.
+# TODO: Trace and implement properly x_samples and y_samples
+
 
 class CReachingDataset(CDataset):
     def __init__(self, filename, noise_sigma=0.0, dataset_sample_rate=30, output_sample_rate=30, ndims=3, n_datapoints=-1):
