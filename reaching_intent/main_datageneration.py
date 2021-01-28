@@ -55,11 +55,6 @@ gen_model_params = create_sim_params(sim_viz=sim_viz,
                                      model_path="pybullet_models/human_torso/model.urdf")
 
 # Add some objects to the scene
-gen_model_params["objects"]["path"].append("pybullet_models/cabinet/cabinet.urdf")
-gen_model_params["objects"]["pos"].append([0.8, 0.0, 0.12])
-gen_model_params["objects"]["rot"].append([0., 0, 0, 1])
-gen_model_params["objects"]["static"].append(True)
-
 gen_model_params["objects"]["path"].append("pybullet_models/duck/duck_vhacd.urdf")
 gen_model_params["objects"]["pos"].append([0.6, 0.1, 0.14])
 gen_model_params["objects"]["rot"].append([0., 0, 0., 1])

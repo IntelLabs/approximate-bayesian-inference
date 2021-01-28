@@ -27,6 +27,10 @@ def create_sim_params(sim_viz=True, sim_timestep=0.01, sim_time=5.0,
     simulator_objects["pos"] = [[0.6, 0, -0.65]]
     simulator_objects["rot"] = [[0, 0, 0, 1]]
     simulator_objects["static"] = [True]
+    simulator_objects["path"].append("pybullet_models/cabinet/cabinet.urdf")
+    simulator_objects["pos"].append([0.8, 0.0, 0.12])
+    simulator_objects["rot"].append([0., 0, 0, 1])
+    simulator_objects["static"].append(True)
     simulator_params["objects"] = simulator_objects
 
     # Controller parameters
@@ -91,6 +95,7 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
                                              physicsClientId=self.sim_id))
 
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1)
+        p.setGravity(0, 0, -9.8, physicsClientId=self.sim_id)
 
         # Set the resting position for each joint
         joint_indices = pb.get_actuable_joint_indices(self.model_id, self.sim_id)
