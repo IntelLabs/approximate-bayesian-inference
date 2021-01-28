@@ -36,12 +36,12 @@ if __name__ == "__main__":
 
     # Simulated arm controller parameters
     controller_params = dict()
-    Kp, Ki, Kd, Krep, iClamp = 5, 0.001, 1, 0.2, 2
+    Kp, Ki, Kd, Krep, iClamp = 5, 0.001, 1, 20, 2
     controller_params["Kp"] = p.addUserDebugParameter(paramName="Kp", rangeMin=0.0, rangeMax=10.0, startValue=Kp, physicsClientId=neSimulator.sim_id)
     controller_params["Kd"] = p.addUserDebugParameter(paramName="Kd", rangeMin=0.0, rangeMax=10.0, startValue=Kd, physicsClientId=neSimulator.sim_id)
     controller_params["Ki"] = p.addUserDebugParameter(paramName="Ki", rangeMin=0.0, rangeMax=1.0, startValue=Ki, physicsClientId=neSimulator.sim_id)
     controller_params["iClamp"] = p.addUserDebugParameter(paramName="iClamp", rangeMin=0.0, rangeMax=10.0, startValue=iClamp, physicsClientId=neSimulator.sim_id)
-    controller_params["Krep"] = p.addUserDebugParameter(paramName="Krep", rangeMin=0.0, rangeMax=1.0, startValue=Krep, physicsClientId=neSimulator.sim_id)
+    controller_params["Krep"] = p.addUserDebugParameter(paramName="Krep", rangeMin=0.0, rangeMax=50.0, startValue=Krep, physicsClientId=neSimulator.sim_id)
 
     while p.isConnected(physicsClientId=neSimulator.sim_id):
         Kp = p.readUserDebugParameter(controller_params["Kp"], physicsClientId=neSimulator.sim_id)

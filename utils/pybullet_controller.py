@@ -170,10 +170,10 @@ class CPotentialFieldController(CController):
         points = []
         for body in self.obstacles:
             closest_points = list(pybullet.getClosestPoints(bodyA=self.model, bodyB=body, distance=self.max_dist,
-                                                       linkIndexA=self.eef_link, linkIndexB=-1, physicsClientId=self.sim_id))
-            closest_points.extend(pybullet.getClosestPoints(bodyA=self.model, bodyB=body, distance=self.max_dist,
-                                                            linkIndexA=self.eef_link-1, linkIndexB=-1,
-                                                            physicsClientId=self.sim_id))
+                                                       linkIndexA=self.eef_link-1, linkIndexB=-1, physicsClientId=self.sim_id))
+            # closest_points.extend(pybullet.getClosestPoints(bodyA=self.model, bodyB=body, distance=self.max_dist,
+            #                                                 linkIndexA=self.eef_link-1, linkIndexB=-1,
+            #                                                 physicsClientId=self.sim_id))
             # closest_points.extend(pybullet.getClosestPoints(bodyA=self.model, bodyB=body, distance=self.max_dist,
             #                                                 linkIndexA=self.eef_link-2, linkIndexB=-1,
             #                                                 physicsClientId=self.sim_id))
@@ -186,11 +186,17 @@ class CPotentialFieldController(CController):
             cdir = np.array(cpoint[6]) - np.array(cpoint[5])
             cdir = cdir / np.linalg.norm(cdir)
             dist = cpoint[8]
-            cmd_rep -= cdir * (1/dist*dist)
-            # draw_line(cpoint[6], cpoint[5], lifetime=1)
 
-        cmd_rep[2] = abs(cmd_rep[2]) + .1
-        # cmd_rep /= len(points)
+            # Quadratic potential
+            # s = 300000.0
+            # cmd_rep -= cdir * min(1., 1. / (s * dist * dist))
+
+            # Exponential potential
+            s = 0.007
+            cmd_rep -= cdir * min(1., np.exp(-0.5 * (dist / s) * (dist / s)) / (s * np.sqrt(2 * np.pi)))
+
+            # draw_line(cpoint[6], cpoint[5], lifetime=.2)
+            # draw_line(cpoint[5], np.array(cpoint[5]) + cdir*dist, lifetime=.2, color=[0, 0, 1])
 
         cmd_pid = self.ctrl.get_command(state, ref)
         self.err = self.ctrl.err
