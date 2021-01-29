@@ -19,14 +19,14 @@ from reaching_intent.generative_models.CReachingDataset import CReachingDataset
 ###################################
 # GENERIC PARAMETERS (tune for each application)
 ###################################
-dataset_path = "datasets/default.dat"
+dataset_path = "datasets/dataset10K_3D.dat"
 
 # Desired number of data points that the dataset will contain
-dataset_points = 1e3
+dataset_points = 1e4
 
 # Max number of data points generated before saving to a file. Important to save batches when generating
 # huge datasets to keep memory requirements bounded.
-dataset_gen_batch = 1e2
+dataset_gen_batch = 1e3
 
 # Read the generic parameters from the command line arguments
 if len(sys.argv) > 3:
@@ -38,7 +38,7 @@ if len(sys.argv) > 3:
 ###################################
 # APPLICATION SPECIFIC PARAMETERS (add/remove/edit parameters to fit your implementation)
 ###################################
-sim_viz = True     # Visualize the generation process
+sim_viz = False     # Visualize the generation process
 sample_rate = 30    # Samples per second
 
 # Generative model parameter limits: start volume (x,y,z), end volume (x,y,z), controller(Kp,Ki,Kd,iClamp,Krep)
