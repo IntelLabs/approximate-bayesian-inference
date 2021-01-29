@@ -69,7 +69,7 @@ nn_layers = 3
 loss_f = loss_MSE
 
 # Model filename
-nn_model_path = "pytorch_models/ne_fc%d_10k_MSE_in%d_out%d.pt" % (nn_layers, input_dim, output_dim)
+nn_model_path = "pytorch_models/ne_fc%d_10k3D_MSE_in%d_out%d.pt" % (nn_layers, input_dim, output_dim)
 
 
 ###################################
@@ -79,12 +79,12 @@ nn_model_path = "pytorch_models/ne_fc%d_10k_MSE_in%d_out%d.pt" % (nn_layers, inp
 load_existing_model = True
 
 # Dataset to use
-dataset_path = "datasets/dataset10K.dat"
+dataset_path = "datasets/dataset10K_3D.dat"
 # Portion (0. - 1.) of the dataset used for training. The remainder will be used for testing.
 train_percentage = 0.9
 
 # Training stops once the loss is below the threshold or the max_train_epochs are reached
-train_loss_threshold = 0.002
+train_loss_threshold = 0.0001
 max_train_epochs = 100
 
 # controls the number of times that the training dataset is gone over on each train call
@@ -209,6 +209,7 @@ while current_loss > train_loss_threshold and max_train_epochs > current_epoch:
 
 print("emulator loss:", current_loss, " training time: ", time.time() - train_time)
 print("=============================================")
+torch.save(neNEmulator.model, nn_model_path)
 
 print("=============================================")
 print("Neural Emulator weights")

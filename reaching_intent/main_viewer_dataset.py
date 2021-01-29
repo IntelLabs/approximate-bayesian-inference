@@ -10,7 +10,7 @@ from reaching_intent.generative_models.CReachingDataset import CReachingDataset
 
 
 # Script configuration
-dataset_path = "datasets/default.dat"
+dataset_path = "datasets/dataset10K_3D.dat"
 sample_rate = 30
 noise_sigma = 0.005  # Noise added to the dataset trajectories
 model_path = "pybullet_models/human_torso/model.urdf"
@@ -27,13 +27,15 @@ simulator_params["sim_id"] = 0
 simulator_params["robot_controller"] = None
 simulator_objects = dict()
 simulator_objects["path"] = ["pybullet_models/table/table.urdf"]
-simulator_objects["pose"] = [[0.6, 0, -0.65]]
+simulator_objects["pos"] = [[0.6, 0, -0.65]]
+simulator_objects["rot"] = [[0, 0, 0, 1]]
 simulator_objects["static"] = [True]
 simulator_params["objects"] = simulator_objects
 neSimulator = CGenerativeModelSimulator(simulator_params)    # Simulator used to generate synthetic data
 
 dataset = CReachingDataset(filename=dataset_path, noise_sigma=noise_sigma,
-                           dataset_sample_rate=sample_rate, output_sample_rate=sample_rate)
+                           dataset_sample_rate=sample_rate, output_sample_rate=sample_rate,
+                           n_datapoints=100)
 
 hold_on = False
 ndims = 3
