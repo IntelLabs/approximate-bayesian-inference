@@ -2,6 +2,9 @@
 import copy
 import time
 import pybullet
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+from mpl_toolkits.mplot3d import Axes3D
 
 from common.common import *
 from reaching_intent.generative_models.CGenerativeModelSimulator import CGenerativeModelSimulator
@@ -25,8 +28,9 @@ if __name__ == "__main__":
     #################################################################################
     # APPLICATION SPECIFIC PARAMETERS
     #################################################################################
-    sim_viz = False  # Show visualization of the simulator
-    n_dims = 3      # Point dimensionality
+    sim_viz = False   # Show visualization of the simulator
+    n_dims = 3        # Point dimensionality
+    make_plot = True  # Create a 3D plot of each inference step
     #################################################################################
     #################################################################################
 
@@ -85,7 +89,7 @@ if __name__ == "__main__":
     prior_distribution = CSamplerUniform({"min": z_min, "max": z_max})
     nuisance_sampler = CSamplerUniform({"min": n_min, "max": n_max})
     proposal_distribution = CSamplerMultivariateNormal({"mean": torch.zeros_like(z_min),
-                                                        "std": t_tensor([0.001, 0.001, 1e-6])})
+                                                        "std": t_tensor([0.01, 0.01, 0.01])})
     #################################################################################
     #################################################################################
 
@@ -111,12 +115,12 @@ if __name__ == "__main__":
 
     # Configure inference
     inference_params = dict()
-    inference_params["nsamples"] = 200
+    inference_params["nsamples"] = 500
     inference_params["burn_in"] = 20
     inference_params["proposal_dist"] = proposal_distribution
     inference_params["z_min"] = z_min
     inference_params["z_max"] = z_max
-    inference_params["timeout"] = 10
+    inference_params["timeout"] = 20
     #################################################################################
     #################################################################################
 
@@ -126,7 +130,7 @@ if __name__ == "__main__":
     neInferenceGrid = CInferenceGrid()
     inference_params["z_min"] = z_min
     inference_params["z_max"] = z_max
-    inference_params["resolution"] = 0.03
+    inference_params["resolution"] = 0.04
     #################################################################################
     #################################################################################
 
@@ -151,17 +155,23 @@ if __name__ == "__main__":
 
     with open("results_%s_%s.dat" % (gen_model.get_name(), neInference.get_name()), "w") as f:
         f.write("Error      Time       %Observed  Slack      t_sample t_gens   t_lprob  #Eval  #Samples\n")
-    #################################################################################
-    #################################################################################
 
     # Draw ground truth
     if visualizer is not None:
         draw_trajectory(obs_model.traj.view(-1, n_dims), color=[0, 1, 0], draw_points=False, physicsClientId=visualizer)
         draw_point(obs_model.get_ground_truth()[latent_mask], [0, 1, 0], size=0.05, width=5, physicsClientId=visualizer)
+    #################################################################################
+    #################################################################################
+
+    # for i in range(25):
+    #     # Obtain observation and initialize latent space and nuisance values from their priors
+    #     o = obs_model.get_observation()
 
     #################################################################################
     # INFERENCE LOOP
     #################################################################################
+    if make_plot is True:
+        fig = plt.figure()
     viz_items = []
     iteration = 0
     while obs_model.is_ready():
@@ -213,12 +223,16 @@ if __name__ == "__main__":
         error = torch.sqrt(torch.sum(diff * diff))
         traj_percent = float(len(o)) / len(obs_model.get_ground_truth_trajectory())
 
-        debug_text = " Error: %2.4f \n Time: %2.4f \n PercentObserved: %2.4f \n #Samples: %d \n Slack: %2.6f \n Num Evals: %d \n Num Gens: %d" % (error, runtime, traj_percent, stats["nsamples"], MAP_slack, stats["nevals"], stats["ngens"])
+        debug_text = " Error: %2.4f \n Time: %2.4f \n PercentObserved: %2.4f \n #Samples: %d \n Slack: %2.6f \n Num Evals: %d \n Num Gens: %d" % \
+                     (error, runtime, traj_percent, stats["nsamples"], MAP_slack, stats["nevals"], stats["ngens"])
         print("============================================")
         print(debug_text)
         print("============================================")
-        with open("results_%s_%s.dat" % (gen_model.get_name(), neInference.get_name()), "a") as f:
-            f.write("%2.8f %2.8f %2.8f %2.8f %2.6f %2.6f %2.6f %d  %d\n" % (error, runtime, traj_percent, MAP_slack, stats["tsamples"], stats["tgens"], stats["tevals"], stats["nevals"], stats["nsamples"]))
+        with open("results/results_%s_%s.dat" % (gen_model.get_name(), neInference.get_name()), "a") as f:
+            f.write("%2.8f %2.8f %2.8f %2.8f %2.6f %2.6f %2.6f %d  %d\n" % (error, runtime, traj_percent, MAP_slack,
+                                                                            stats["tsamples"], stats["tgens"],
+                                                                            stats["tevals"], stats["nevals"],
+                                                                            stats["nsamples"]))
 
         if visualizer is not None:
             # for s in samples:
@@ -228,9 +242,41 @@ if __name__ == "__main__":
             # Draw generated trajectory for the GT point
             gen_traj = gen_model.generate(MAP_z.view(1, -1), n.view(1, -1))
             viz_items.extend(draw_trajectory(gen_traj.view(-1, n_dims), [1, 0, 0], draw_points=False, width=5))
-            viz_items.extend(draw_trajectory_diff(obs_model.traj.view(-1, n_dims), gen_traj.view(-1, n_dims), [0, 0, .8], width=1))
+            viz_items.extend(draw_trajectory_diff(obs_model.traj.view(-1, n_dims), gen_traj.view(-1, n_dims),
+                                                  [0, 0, .8], width=1))
 
-        time.sleep(0.1)
+        if make_plot is True:
+            plt.clf()
+            ax = fig.add_subplot(111, projection='3d')
+            ax.view_init(elev=30, azim=160)
+            ax.set_xlim(-.2, 1)
+            ax.set_ylim(-.7, .7)
+            ax.set_zlim(0, 1)
+            viz_indices = likelihoods[idx_slack] > -10
+            samples_viz = samples[viz_indices]
+            colors = cm.hot(np.exp((likelihoods[idx_slack, :] - likelihoods[idx_slack, :].max()).numpy()))
+            alphas = np.exp((likelihoods[idx_slack, :] - likelihoods[idx_slack, :].max()).numpy())
+            colors[:, 3] = np.clip(alphas, 0.05, 1.0)
+            ax.scatter(xs=samples_viz[:, 0], ys=samples_viz[:, 1], zs=samples_viz[:, 2], c=colors[viz_indices])
+            ax.plot(xs=o.view(-1, n_dims)[:, 0], ys=o.view(-1, n_dims)[:, 1], zs=o.view(-1, n_dims)[:, 2], c='purple')
+            ax.plot(xs=[0, .1], ys=[0, 0], zs=[0, 0], c='r')
+            ax.plot(xs=[0, 0], ys=[0, .1], zs=[0, 0], c='g')
+            ax.plot(xs=[0, 0], ys=[0, 0], zs=[0, .1], c='b')
+
+            gt_point = obs_model.get_ground_truth()[latent_mask]
+            ax.scatter(xs=[gt_point[0]], ys=[gt_point[1]], zs=[gt_point[2]], c='b', marker='*')
+            # ax.scatter(xs=[MAP_z[0]], ys=[MAP_z[1]], zs=[MAP_z[2]], c='k', marker='*')
+            ax.plot(xs=[gt_point[0], MAP_z[0]], ys=[gt_point[1], MAP_z[1]], zs=[gt_point[2], MAP_z[2]], c='b',
+                    linestyle="--", alpha=0.5)
+
+            debug_text = "Err: %2.4f Time: %2.4f %% Obs: %2.4f #Samples: %d $\epsilon$: %2.6f NEvals: %d NGens: %d" % \
+                         (error, runtime, traj_percent, stats["nsamples"], MAP_slack, stats["nevals"], stats["ngens"])
+            plt.title(debug_text, fontsize=8)
+            plt.show(block=False)
+            plt.pause(0.01)
+            plt.savefig("results/inference_%s_it%d.png" % (neInference.get_name(), iteration), dps=700)
+        else:
+            time.sleep(0.01)
 
         iteration = iteration + 1
         #################################################################################
