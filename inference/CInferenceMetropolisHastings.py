@@ -116,6 +116,6 @@ class CInferenceMetropolisHastings(CBaseInferenceAlgorithm):
               (n_evals, len(samples), (len(samples)/float(n_evals))*100.0, stats["tsamples"] / stats["nsamples"]))
 
         if len(samples) <= burn_in_samples:
-            return samples, torch.from_numpy(likelihoods), stats
+            return samples, torch.from_numpy(likelihoods.swapaxes(0, 1)), stats
         else:
-            return samples[burn_in_samples:], torch.from_numpy(likelihoods[burn_in_samples:, :]), stats
+            return samples[burn_in_samples:], torch.from_numpy(likelihoods[burn_in_samples:, :].swapaxes(0, 1)), stats
