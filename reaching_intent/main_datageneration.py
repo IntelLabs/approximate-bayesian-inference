@@ -19,7 +19,7 @@ from reaching_intent.generative_models.CReachingDataset import CReachingDataset
 ###################################
 # GENERIC PARAMETERS (tune for each application)
 ###################################
-dataset_path = "datasets/dataset10K_3D.dat"
+dataset_path = "datasets/dataset10K_3D_cabinet.dat"
 
 # Desired number of data points that the dataset will contain
 dataset_points = 1e4
@@ -38,7 +38,7 @@ if len(sys.argv) > 3:
 ###################################
 # APPLICATION SPECIFIC PARAMETERS (add/remove/edit parameters to fit your implementation)
 ###################################
-sim_viz = False     # Visualize the generation process
+sim_viz = True     # Visualize the generation process
 sample_rate = 30    # Samples per second
 
 # Generative model parameter limits: start volume (x,y,z), end volume (x,y,z), controller(Kp,Ki,Kd,iClamp,Krep)
@@ -54,16 +54,28 @@ gen_model_params = create_sim_params(sim_viz=sim_viz,
                                      sample_rate=sample_rate,
                                      model_path="pybullet_models/human_torso/model.urdf")
 
+# Add a table to the scene
+gen_model_params["objects"]["path"] = ["pybullet_models/table/table.urdf"]
+gen_model_params["objects"]["pos"] = [[0.6, 0, -0.65]]
+gen_model_params["objects"]["rot"] = [[0, 0, 0, 1]]
+gen_model_params["objects"]["static"] = [True]
+
+# Add a cabinet to the scene
+gen_model_params["objects"]["path"].append("pybullet_models/cabinet/cabinet.urdf")
+gen_model_params["objects"]["pos"].append([0.8, 0.0, 0.12])
+gen_model_params["objects"]["rot"].append([0., 0, 0, 1])
+gen_model_params["objects"]["static"].append(True)
+
 # Add some objects to the scene
-# gen_model_params["objects"]["path"].append("pybullet_models/duck/duck_vhacd.urdf")
-# gen_model_params["objects"]["pos"].append([0.6, 0.1, 0.14])
-# gen_model_params["objects"]["rot"].append([0., 0, 0., 1])
-# gen_model_params["objects"]["static"].append(False)
-#
-# gen_model_params["objects"]["path"].append("pybullet_models/duck/duck_vhacd.urdf")
-# gen_model_params["objects"]["pos"].append([0.4, -0.2, 0.14])
-# gen_model_params["objects"]["rot"].append([0., 0, 1., 0])
-# gen_model_params["objects"]["static"].append(False)
+gen_model_params["objects"]["path"].append("pybullet_models/duck/duck_vhacd.urdf")
+gen_model_params["objects"]["pos"].append([0.6, 0.1, 0.14])
+gen_model_params["objects"]["rot"].append([0., 0, 0., 1])
+gen_model_params["objects"]["static"].append(False)
+
+gen_model_params["objects"]["path"].append("pybullet_models/duck/duck_vhacd.urdf")
+gen_model_params["objects"]["pos"].append([0.4, -0.2, 0.14])
+gen_model_params["objects"]["rot"].append([0., 0, 1., 0])
+gen_model_params["objects"]["static"].append(False)
 ###################################
 
 
