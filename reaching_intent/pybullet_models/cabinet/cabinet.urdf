@@ -15,15 +15,14 @@
     <visual>
       <origin rpy="0 0 1.57" xyz="0 0 0"/>
       <geometry>
-        <mesh filename="cabinet.obj" scale="1 1 1"/>
+        <mesh filename="cabinet.obj" scale="1.5 1.5 1.5"/>
       </geometry>
     </visual>
     <collision concave="yes">
       <origin rpy="0 0 1.57" xyz="0 0 0"/>
       <geometry>
-	 	<mesh filename="cabinet.obj" scale="1 1 1"/>
+	 	<mesh filename="cabinet.obj" scale="1.5 1.5 1.5"/>
       </geometry>
     </collision>
   </link>
 </robot>
-
