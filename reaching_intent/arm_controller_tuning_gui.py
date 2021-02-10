@@ -12,6 +12,9 @@ from samplers.CSamplerUniform import CSamplerUniform
 import pybullet as p
 from reaching_intent.generative_models.CGenerativeModelSimulator import CGenerativeModelSimulator
 from reaching_intent.generative_models.CGenerativeModelSimulator import create_sim_params
+from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_cabinet_and_two_objects
+from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_table
+from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_cabinet
 ###################################
 
 
@@ -29,6 +32,7 @@ if __name__ == "__main__":
 
     # Get simulator parameters from the app specific import
     simulator_params = create_sim_params()
+    scene_with_cabinet_and_two_objects(simulator_params)
 
     # Simulator used to generate synthetic data
     neSimulator = CGenerativeModelSimulator(simulator_params)

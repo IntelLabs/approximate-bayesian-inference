@@ -13,6 +13,49 @@ from pathlib import Path
 from os import sep
 
 
+def scene_with_table(gen_model_params):
+    gen_model_params["objects"]["path"] = ["pybullet_models/table/table.urdf"]
+    gen_model_params["objects"]["pos"] = [[0.6, 0, -0.65]]
+    gen_model_params["objects"]["rot"] = [[0, 0, 0, 1]]
+    gen_model_params["objects"]["static"] = [True]
+
+
+def scene_with_cabinet(gen_model_params):
+    gen_model_params["objects"]["path"] = ["pybullet_models/table/table.urdf"]
+    gen_model_params["objects"]["pos"] = [[0.6, 0, -0.65]]
+    gen_model_params["objects"]["rot"] = [[0, 0, 0, 1]]
+    gen_model_params["objects"]["static"] = [True]
+    gen_model_params["objects"]["path"].append("pybullet_models/cabinet/cabinet.urdf")
+    gen_model_params["objects"]["pos"].append([0.8, 0.0, 0.12])
+    gen_model_params["objects"]["rot"].append([0., 0, 0, 1])
+    gen_model_params["objects"]["static"].append(True)
+
+
+def scene_with_cabinet_and_two_objects(gen_model_params):
+    # Add a table to the scene
+    gen_model_params["objects"]["path"] = ["pybullet_models/table/table.urdf"]
+    gen_model_params["objects"]["pos"] = [[0.6, 0, -0.65]]
+    gen_model_params["objects"]["rot"] = [[0, 0, 0, 1]]
+    gen_model_params["objects"]["static"] = [True]
+
+    # Add a cabinet to the scene
+    gen_model_params["objects"]["path"].append("pybullet_models/cabinet/cabinet.urdf")
+    gen_model_params["objects"]["pos"].append([0.8, 0.0, 0.12])
+    gen_model_params["objects"]["rot"].append([0., 0, 0, 1])
+    gen_model_params["objects"]["static"].append(True)
+
+    # Add some objects to the scene
+    gen_model_params["objects"]["path"].append("pybullet_models/duck/duck_vhacd.urdf")
+    gen_model_params["objects"]["pos"].append([0.6, 0.1, 0.24])
+    gen_model_params["objects"]["rot"].append([0., 0, 0., 1])
+    gen_model_params["objects"]["static"].append(False)
+
+    gen_model_params["objects"]["path"].append("pybullet_models/duck/duck_vhacd.urdf")
+    gen_model_params["objects"]["pos"].append([0.4, -0.2, 0.14])
+    gen_model_params["objects"]["rot"].append([0., 0, 1., 0])
+    gen_model_params["objects"]["static"].append(False)
+
+
 def create_sim_params(sim_viz=True, sim_timestep=0.01, sim_time=5.0,
                       model_path="pybullet_models/human_torso/model.urdf", sample_rate=30):
     simulator_params = dict()

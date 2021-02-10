@@ -9,6 +9,10 @@ from mpl_toolkits.mplot3d import Axes3D
 from common.common import *
 from reaching_intent.generative_models.CGenerativeModelSimulator import CGenerativeModelSimulator
 from reaching_intent.generative_models.CGenerativeModelSimulator import create_sim_params
+from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_cabinet_and_two_objects
+from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_table
+from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_cabinet
+
 from neural_emulators.CGenerativeModelNeuralEmulator import CGenerativeModelNeuralEmulator
 from samplers.CSamplerUniform import CSamplerUniform
 from samplers.CSamplerMultivariateNormal import CSamplerMultivariateNormal
@@ -64,11 +68,12 @@ if __name__ == "__main__":
     #################################################################################
 
     #################################################################################
-    # GENERATIVE MODEL SIMULATOR
+    # GENERATIVE MODEL SIMULATOR (also used for visualization)
     #################################################################################
     print("Load generative model: Simulator")
     # General parameters
     simulator_params = create_sim_params(sim_viz=sim_viz)
+    scene_with_cabinet_and_two_objects(simulator_params)
     gen_model_sim = CGenerativeModelSimulator(simulator_params)
     gen_model = gen_model_sim
     #################################################################################

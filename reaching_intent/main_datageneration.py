@@ -11,9 +11,12 @@ from samplers.CSamplerUniform import CSamplerUniform
 ###################################
 # APPLICATION SPECIFIC IMPORTS (import from your application specific module)
 ###################################
+from reaching_intent.generative_models.CReachingDataset import CReachingDataset
 from reaching_intent.generative_models.CGenerativeModelSimulator import CGenerativeModelSimulator
 from reaching_intent.generative_models.CGenerativeModelSimulator import create_sim_params
-from reaching_intent.generative_models.CReachingDataset import CReachingDataset
+from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_cabinet_and_two_objects
+from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_table
+from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_cabinet
 ###################################
 
 ###################################
@@ -54,28 +57,8 @@ gen_model_params = create_sim_params(sim_viz=sim_viz,
                                      sample_rate=sample_rate,
                                      model_path="pybullet_models/human_torso/model.urdf")
 
-# Add a table to the scene
-gen_model_params["objects"]["path"] = ["pybullet_models/table/table.urdf"]
-gen_model_params["objects"]["pos"] = [[0.6, 0, -0.65]]
-gen_model_params["objects"]["rot"] = [[0, 0, 0, 1]]
-gen_model_params["objects"]["static"] = [True]
-
-# Add a cabinet to the scene
-gen_model_params["objects"]["path"].append("pybullet_models/cabinet/cabinet.urdf")
-gen_model_params["objects"]["pos"].append([0.8, 0.0, 0.12])
-gen_model_params["objects"]["rot"].append([0., 0, 0, 1])
-gen_model_params["objects"]["static"].append(True)
-
-# Add some objects to the scene
-gen_model_params["objects"]["path"].append("pybullet_models/duck/duck_vhacd.urdf")
-gen_model_params["objects"]["pos"].append([0.6, 0.1, 0.14])
-gen_model_params["objects"]["rot"].append([0., 0, 0., 1])
-gen_model_params["objects"]["static"].append(False)
-
-gen_model_params["objects"]["path"].append("pybullet_models/duck/duck_vhacd.urdf")
-gen_model_params["objects"]["pos"].append([0.4, -0.2, 0.14])
-gen_model_params["objects"]["rot"].append([0., 0, 1., 0])
-gen_model_params["objects"]["static"].append(False)
+# Set up the scene
+scene_with_cabinet_and_two_objects(gen_model_params)
 ###################################
 
 
