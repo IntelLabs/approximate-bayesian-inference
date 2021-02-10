@@ -23,15 +23,13 @@ def create_sim_params(sim_viz=True, sim_timestep=0.01, sim_time=5.0,
     simulator_params["sample_rate"] = sample_rate
     simulator_params["sim_id"] = 0
     simulator_objects = dict()
-    simulator_objects["path"] = ["pybullet_models/table/table.urdf"]
-    simulator_objects["pos"] = [[0.6, 0, -0.65]]
-    simulator_objects["rot"] = [[0, 0, 0, 1]]
-    simulator_objects["static"] = [True]
-    # simulator_objects["path"].append("pybullet_models/cabinet/cabinet.urdf")
-    # simulator_objects["pos"].append([0.8, 0.0, 0.12])
-    # simulator_objects["rot"].append([0., 0, 0, 1])
-    # simulator_objects["static"].append(True)
     simulator_params["objects"] = simulator_objects
+
+    simulator_params["camera"] = dict()
+    simulator_params["camera"]["dist"] = .8
+    simulator_params["camera"]["yaw"] = -150
+    simulator_params["camera"]["pitch"] = -15
+    simulator_params["camera"]["target"] = [.3, .3, .3]
 
     # Controller parameters
     Kp = 10
@@ -65,6 +63,7 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
         self.objects_pos = sim_params["objects"]["pos"]
         self.objects_rot = sim_params["objects"]["rot"]
         self.controller = sim_params["robot_controller"]
+        self.camera = sim_params["camera"]
         self.model = self.Model(self.generate, 4, self.sim_time * self.sample_rate * 3, self.device)
         self.coll_disable_pairs = []
         self.initialize(self.model_path, self.visualize, self.timestep, self.sim_time)
@@ -94,6 +93,9 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
                                              basePosition=self.objects_pos[i], baseOrientation=self.objects_rot[i],
                                              physicsClientId=self.sim_id))
 
+        p.resetDebugVisualizerCamera(self.camera["dist"], self.camera["yaw"], self.camera["pitch"],
+                                     self.camera["target"])
+
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1)
         p.setGravity(0, 0, -9.8, physicsClientId=self.sim_id)
 
@@ -108,6 +110,8 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
 
     def reset(self):
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0)
+        p.resetDebugVisualizerCamera(self.camera["dist"], self.camera["yaw"], self.camera["pitch"],
+                                     self.camera["target"])
         p.resetSimulation(physicsClientId=self.sim_id)
         p.setGravity(0, 0, -9.81, physicsClientId=self.sim_id)
         self.model_id = p.loadURDF(self.model_path, useFixedBase=1, physicsClientId=self.sim_id, flags=p.URDF_USE_SELF_COLLISION)
