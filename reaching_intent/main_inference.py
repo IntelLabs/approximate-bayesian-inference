@@ -61,9 +61,9 @@ if __name__ == "__main__":
     nuisance_space = ContinousSpace(len(n_min), None, n_min, n_max)
 
     # Discretize the slack terms to be used for inference
-    num_slacks = 50
-    inference_slacks = torch.arange(1E-6, 20.0, 20.0 / num_slacks).double()
-    inference_slacks = torch.exp(inference_slacks) * 1E-6
+    num_slacks = 20
+    inference_slacks = torch.arange(1E-2, 20.0, 20.0 / num_slacks).double()
+    inference_slacks = torch.exp(inference_slacks) * 1E-2
     #################################################################################
     #################################################################################
 
@@ -83,7 +83,7 @@ if __name__ == "__main__":
     # GENERATIVE MODEL NEURAL EMULATOR
     #################################################################################
     print("Load generative model: Neural Surrogate")
-    nn_model_path = "pytorch_models/ne_fc3_10k3D_MSE_in11_out450.pt"
+    nn_model_path = "pytorch_models/ne_fc3_10k3D_MSE_in11_out288.pt"
     gen_model_neural_emulator = CGenerativeModelNeuralEmulator(nn_model_path)
     #################################################################################
     #################################################################################
@@ -94,7 +94,7 @@ if __name__ == "__main__":
     prior_distribution = CSamplerUniform({"min": z_min, "max": z_max})
     nuisance_sampler = CSamplerUniform({"min": n_min, "max": n_max})
     proposal_distribution = CSamplerMultivariateNormal({"mean": torch.zeros_like(z_min),
-                                                        "std": t_tensor([0.01, 0.01, 0.01])})
+                                                        "std": t_tensor([0.000001, 0.000001, 0.000001])})
     #################################################################################
     #################################################################################
 
@@ -105,11 +105,12 @@ if __name__ == "__main__":
     print("Prepare observation model")
     observer_params = copy.deepcopy(simulator_params)
     observer_params["sigma"] = 0.001  # Additional gaussian noise added to observed trajectories
-    observer_params["dataset_path"] = "./datasets/dataset10K.dat"
+    observer_params["dataset_path"] = "./datasets/dataset10K_3D_96p.dat"
     observer_params["min_points"] = 3
     observer_params["obs_dimensions"] = 3
     observer_params["num_trajs"] = 100
     obs_model = CObservationModelDataset(observer_params)
+    obs_model.new_trajectory(12)
     #################################################################################
     #################################################################################
 
@@ -143,8 +144,8 @@ if __name__ == "__main__":
     # SELECTION of generative model and inference algorithm
     #################################################################################
     gen_model = gen_model_neural_emulator
-    # neInference = neInferenceGrid
-    neInference = neInferenceMCMC
+    neInference = neInferenceGrid
+    # neInference = neInferenceMCMC
     # gen_model = gen_model_sim
     #################################################################################
     #################################################################################
@@ -179,11 +180,12 @@ if __name__ == "__main__":
         fig = plt.figure()
     viz_items = []
     iteration = 0
+    z = prior_distribution.sample(1, None)
     while obs_model.is_ready():
         # Obtain observation and initialize latent space and nuisance values from their priors
         o = obs_model.get_observation()
         set_eef_position(o[-n_dims:], gen_model_sim.model_id, gen_model_sim.eef_link, physicsClientId=visualizer)
-        z = prior_distribution.sample(1, None)
+        # z = prior_distribution.sample(1, None)
         n = nuisance_sampler.sample(1, None)
 
         # Nuisance starting position set to the first observed point
@@ -227,6 +229,8 @@ if __name__ == "__main__":
         diff = obs_model.get_ground_truth()[latent_mask] - MAP_z
         error = torch.sqrt(torch.sum(diff * diff))
         traj_percent = float(len(o)) / len(obs_model.get_ground_truth_trajectory())
+
+        z = MAP_z.view(1, -1)
 
         debug_text = " Error: %2.4f \n Time: %2.4f \n PercentObserved: %2.4f \n #Samples: %d \n Slack: %2.6f \n Num Evals: %d \n Num Gens: %d" % \
                      (error, runtime, traj_percent, stats["nsamples"], MAP_slack, stats["nevals"], stats["ngens"])
@@ -274,8 +278,8 @@ if __name__ == "__main__":
             ax.plot(xs=[gt_point[0], MAP_z[0]], ys=[gt_point[1], MAP_z[1]], zs=[gt_point[2], MAP_z[2]], c='b',
                     linestyle="--", alpha=0.5)
 
-            debug_text = "Err: %2.4f Time: %2.4f %% Obs: %2.4f #Samples: %d $\epsilon$: %2.6f NEvals: %d NGens: %d" % \
-                         (error, runtime, traj_percent, stats["nsamples"], MAP_slack, stats["nevals"], stats["ngens"])
+            debug_text = "Err: %2.4f T: %2.4f Obs%%: %2.4f #Samples: %d AccRate: %2.4f $\epsilon$: %2.6f NEvals: %d NGens: %d" % \
+                         (error, runtime, traj_percent, stats["nsamples"], stats["nsamples"] / stats["ngens"], MAP_slack, stats["nevals"], stats["ngens"])
             plt.title(debug_text, fontsize=8)
             plt.show(block=False)
             plt.pause(0.01)
