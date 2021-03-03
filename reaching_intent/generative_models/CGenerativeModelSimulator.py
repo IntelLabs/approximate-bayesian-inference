@@ -67,6 +67,10 @@ def create_sim_params(sim_viz=True, sim_timestep=0.01, sim_time=5.0,
     simulator_params["sim_id"] = 0
     simulator_objects = dict()
     simulator_params["objects"] = simulator_objects
+    simulator_params["objects"]["path"] = list()
+    simulator_params["objects"]["static"] = list()
+    simulator_params["objects"]["pos"] = list()
+    simulator_params["objects"]["rot"] = list()
 
     simulator_params["camera"] = dict()
     simulator_params["camera"]["dist"] = .8
