@@ -3,21 +3,24 @@ from common.common import *
 
 def resample_trajectory(traj, old_sample_rate, new_sample_rate, ndims=3):
 
-        resampled = t_tensor([])
+    if old_sample_rate == new_sample_rate:
+        return traj
 
-        n_points = (new_sample_rate / old_sample_rate) * (len(traj)/ndims)
+    resampled = t_tensor([])
 
-        traj_len = len(traj) / ndims
-        traj_ini = 0
-        traj_end = traj_len - 1
-        traj_incr = traj_len / n_points
-        for s in np.arange(traj_ini, traj_end, traj_incr):
-            resampled = torch.cat((resampled, traj[int(s)*ndims:int(s)*ndims+ndims]))
+    n_points = (new_sample_rate / old_sample_rate) * (len(traj)/ndims)
 
-        if len(resampled) > n_points * ndims:
-            resampled = resampled[0:int(n_points) * ndims]
+    traj_len = len(traj) / ndims
+    traj_ini = 0
+    traj_end = traj_len
+    traj_incr = traj_len / n_points
+    for s in np.arange(traj_ini, traj_end, traj_incr):
+        resampled = torch.cat((resampled, traj[int(s)*ndims:int(s)*ndims+ndims]))
 
-        return resampled
+    if len(resampled) > n_points * ndims:
+        resampled = resampled[0:int(n_points) * ndims]
+
+    return resampled
 
 
 def to_indices(space_min, resolution, x, y, z):
