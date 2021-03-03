@@ -3,12 +3,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data
+from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_table
 
 from common.common import *
 
 
 class CNeuralEmulatorNN(nn.Module):
-    def __init__(self, input_dim, output_dim, nlayers=4, debug=False, device="cpu", activation=F.relu, criterion=F.mse_loss):
+    def __init__(self, input_dim, output_dim, nlayers=4, nlayers_dims=[],
+                 debug=False, device="cpu", activation=F.relu, criterion=F.mse_loss):
         super(CNeuralEmulatorNN, self).__init__()
         self.is_differentiable = True
 
@@ -22,11 +24,19 @@ class CNeuralEmulatorNN(nn.Module):
 
         self.layers = [None] * nlayers
 
-        self.layers[0] = nn.Linear(input_dim, output_dim).to(device)
-        self.arch = self.arch + "fc{%d_%d}-" % (input_dim, output_dim)
-        for i in range(1, nlayers):
-            self.layers[i] = nn.Linear(output_dim, output_dim).to(device)  # Outputs mu and sigma. Therefore the ouput dims are * 2
-            self.arch = self.arch + "fc{%d_%d}-" % (output_dim, output_dim)
+        if len(nlayers_dims) > 0:
+            assert len(nlayers_dims) == nlayers + 1
+        else:
+            nlayers_dims = list()
+            nlayers_dims.append(input_dim)
+            for i in range(1, nlayers):
+                nlayers_dims.append(output_dim)
+
+        for i in range(0, nlayers):
+            in_dim = nlayers_dims[i]
+            out_dim = nlayers_dims[i+1]
+            self.layers[i] = nn.Linear(nlayers_dims[i], nlayers_dims[i+1]).to(device)  # Outputs mu and sigma. Therefore the ouput dims are * 2
+            self.arch = self.arch + "fc%d_%d-" % (in_dim, out_dim)
 
         self.output_dim = output_dim
         self.input_dim = input_dim
@@ -115,7 +125,7 @@ class CNeuralEmulatorNN(nn.Module):
                 optimizer.zero_grad()
 
                 # forward + backward + optimize
-                outputs = self.forward(inputs, nn.Dropout(p=0.2)) # Use dropout when training to avoid overfitting
+                outputs = self.forward(inputs, nn.Dropout(p=0.2))  # Use dropout when training to avoid overfitting
                 # outputs = self.forward(inputs, None)
                 loss, loss_terms = self.criterion(outputs, ground_truth)
                 # https://discuss.pytorch.org/t/loss-backward-raises-error-grad-can-be-implicitly-created-only-for-scalar-outputs/12152
