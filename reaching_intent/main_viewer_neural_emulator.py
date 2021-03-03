@@ -35,9 +35,9 @@ from utils.draw import draw_text
 # APPLICATION SPECIFIC PARAMETERS (add/remove/edit parameters to fit your implementation)
 ###################################
 sample_rate = 30    # Sensor sampling rate
-sim_time = 5        # Prediction time window in seconds
+sim_time = 3.2      # Prediction time window in seconds
 n_dims = 3          # Point dimensionality
-n_points = sample_rate * sim_time
+n_points = int(sample_rate * sim_time)
 
 # Generative model parameter limits: start volume (x,y,z), end volume (x,y,z), controller(Kp, Ki, Kd, iClamp, Krep)
 param_limits_min = t_tensor([-0.06, 0.30, -0.10, 0.25, -0.4, 0.20, 5, 0.0, 0, 0, 90.0])
@@ -48,7 +48,7 @@ latent_mask = t_tensor([0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0]) == 1  # We are interes
 nuisance_mask = t_tensor([0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0]) == 0  # The rest of the parameters are considered nuisance
 
 # Neural emulator path
-nn_model_path = "pytorch_models/ne_fc3_10k3D_MSE_in11_out450.pt"
+nn_model_path = "pytorch_models/ne_fc3_10k3D_MSE_in11_out288.pt"
 ###################################
 
 

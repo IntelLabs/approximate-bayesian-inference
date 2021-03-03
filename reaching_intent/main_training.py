@@ -35,6 +35,8 @@ from utils.draw import draw_trajectory
 from utils.draw import draw_trajectory_diff
 from utils.draw import draw_point
 from utils.draw import draw_text
+from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_table
+
 # import mss  # For screenshots
 
 
@@ -42,11 +44,11 @@ from utils.draw import draw_text
 # APPLICATION SPECIFIC PARAMETERS (add/remove/edit parameters to fit your implementation)
 ###################################
 sample_rate = 30    # Sensor sampling rate
-sim_time = 5        # Prediction time window in seconds
+sim_time = 3.2      # Prediction time window in seconds
 n_dims = 3          # Point dimensionality
-n_points = sample_rate * sim_time  # Number of points in sequence that compose a trajectory
+n_points = int(sample_rate * sim_time)  # Number of points in sequence that compose a trajectory
 debug = False       # Print verbose debug to stdout
-viz_debug = False   # Show 3D visualization debug of the training process
+viz_debug = True   # Show 3D visualization debug of the training process
 ###################################
 
 ###################################
@@ -66,6 +68,7 @@ output_dim = n_points * n_dims
 # Neural Surrogate architecture description
 activation = torch.relu
 nn_layers = 3
+nn_layer_dims = [torch.count_nonzero(latent_mask), 32, 64, output_dim]
 loss_f = loss_MSE
 
 # Model filename
@@ -76,10 +79,10 @@ nn_model_path = "pytorch_models/ne_fc%d_10k3D_MSE_in%d_out%d.pt" % (nn_layers, i
 # GENERIC TRAINING PARAMETERS
 ###################################
 # True = Load an existing model (if exists) and resume training.
-load_existing_model = True
+load_existing_model = False
 
 # Dataset to use
-dataset_path = "datasets/dataset10K_3D.dat"
+dataset_path = "datasets/dataset10K_3D_96p.dat"
 # Portion (0. - 1.) of the dataset used for training. The remainder will be used for testing.
 train_percentage = 0.9
 
@@ -107,7 +110,8 @@ neNEmulator = CGenerativeModelNeuralEmulator(nn_model_path)  # Neural emulator f
 
 # Check if there is a neural emulator model loaded. Create a new one otherwise.
 if neNEmulator.model is None or not load_existing_model:
-    neNEmulator.model = CNeuralEmulatorNN(torch.sum(latent_mask), output_dim, nn_layers, debug, device, activation, loss_f)
+    neNEmulator.model = CNeuralEmulatorNN(torch.sum(latent_mask), output_dim, nn_layers, nn_layer_dims,
+                                          debug, device, activation, loss_f)
 else:
     neNEmulator.model.move_to_device(device)
 
@@ -124,6 +128,7 @@ neNEmulator.input_dims = input_dim
 if viz_debug:
     # Load simulator for visualization purposes only
     simulator_params = create_sim_params(sim_time=sim_time, sample_rate=sample_rate)
+    scene_with_table(simulator_params)
     neSimulator = CGenerativeModelSimulator(simulator_params)
 
 # Check if the NeuralEmulator is trained. Train it otherwise.
@@ -132,7 +137,7 @@ print("LOAD AND TRAIN Neural Emulator")
 print("Loading dataset...")
 tic = time.time()
 dataset = CReachingDataset(filename=dataset_path, output_sample_rate=sample_rate, dataset_sample_rate=sample_rate,
-                           noise_sigma=noise_sigma)
+                           noise_sigma=noise_sigma, n_datapoints=-1, traj_duration=sim_time)
 
 train_dataset = CReachingDataset("")
 test_dataset = CReachingDataset("")
@@ -148,7 +153,7 @@ if viz_debug:
     for i in range(5):
         idx = int((torch.rand(1) * len(dataset)).item())
         dataset_traj = dataset.samples[idx][1]
-        draw_trajectory(dataset_traj.view(-1,3), color=[1, 1, 0], width=2, draw_points=True,
+        draw_trajectory(dataset_traj.view(-1, 3), color=[1, 1, 0], width=2, draw_points=True,
                         physicsClientId=neSimulator.sim_id)
 
 train_time = time.time()
@@ -207,7 +212,7 @@ while current_loss > train_loss_threshold and max_train_epochs > current_epoch:
             #     sct.shot(mon=2, output="training_video/frame_%d.png" % current_epoch)
 
 
-print("emulator loss:", current_loss, " training time: ", time.time() - train_time)
+print("emulator loss:", current_loss, " training time: ", (time.time() - train_time))
 print("=============================================")
 torch.save(neNEmulator.model, nn_model_path)
 
