@@ -10,13 +10,15 @@ from utils.misc import resample_trajectory
 
 
 class CReachingDataset(CDataset):
-    def __init__(self, filename, noise_sigma=0.0, dataset_sample_rate=30, output_sample_rate=30, ndims=3, n_datapoints=-1):
+    def __init__(self, filename, noise_sigma=0.0, dataset_sample_rate=30, output_sample_rate=30, ndims=3,
+                 n_datapoints=-1, traj_duration=5.0):
         # super(CReachingDataset, self).__init__(filename) # Parent constructor not called intentionally.
         self.filename = filename
         self.samples = list()
         self.x_samples = t_tensor([])  # Input values
         self.y_samples = t_tensor([])  # Output values
-        self.dataset_load(noise_sigma, ndims, dataset_sample_rate, output_sample_rate, n_datapoints=n_datapoints)
+        self.dataset_load(noise_sigma, ndims, dataset_sample_rate, output_sample_rate,
+                          n_datapoints=n_datapoints, trajectory_duration=traj_duration)
 
     def dataset_load(self, noise_sigma=0.001, ndims=3, dataset_sample_rate=30, output_sample_rate=30,
                      prefix_samples=4, trajectory_duration=5.0, n_datapoints=-1):
@@ -42,23 +44,24 @@ class CReachingDataset(CDataset):
         # TODO: Prepare memory for the trajectories and avoid append and cat
 
         # Load samples into two batched tensors of inputs and outputs
-        for idx,l in enumerate(lines):
+        for idx, l in enumerate(lines):
             t_traj = time.time()
             sample = json.loads(l)
 
-            traj_len = len(sample[1]) / 2  # Crop the stdev part of the trajectory
+            # traj_len = len(sample[1]) / 2  # Crop the stdev part of the trajectory
+            traj_len = len(sample[1])
 
             out_params = resample_trajectory(t_tensor(sample[1][0:int(traj_len)]), dataset_sample_rate, output_sample_rate)
 
             # Input parameters are the start point of the trajectory, the endpoint and the controller parameters
             in_params = t_tensor(sample[0])
 
-            if ndims * trajectory_duration * output_sample_rate > len(out_params):
+            if int(ndims * trajectory_duration * output_sample_rate) > len(out_params):
                 padding = out_params[-ndims:]
                 while ndims * trajectory_duration * output_sample_rate > len(out_params):
                     out_params = torch.cat((out_params, padding))
-            else:
-                out_params = out_params[0:ndims * trajectory_duration * output_sample_rate]
+            elif int(ndims * trajectory_duration * output_sample_rate) < len(out_params):
+                out_params = out_params[0:int(ndims * trajectory_duration * output_sample_rate)]
 
             # Add optional noise to the trajectory
             if noise_sigma != 0:
@@ -74,5 +77,5 @@ class CReachingDataset(CDataset):
                 print("Progress %d / %d. Time per traj: %.3fs ETA in: %.3fs" %
                       (idx, len(lines), time.time()-t_traj, (len(lines) - idx) * (time.time()-t_traj)))
 
-        print("Loaded %d trajectories. Took %.3f s" % (len(self.x_samples), time.time()-t_ini))
+        print("Loaded %d trajectories. Took %.3f s" % (len(self.x_samples), (time.time()-t_ini)))
         return self.samples
