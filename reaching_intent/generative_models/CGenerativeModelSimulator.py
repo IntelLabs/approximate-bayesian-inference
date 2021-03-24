@@ -181,6 +181,10 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
         """
         Generates a trajectory using the initial cartesian position, target cartesian position and controller
         parameters (Kp Ki Kd iClamp Krep).
+
+        # TODO: Add proper latent and nuisance parameters handling, right now this is hardcoded. See the indices below
+        #       in lines 196-198. What parameters come from "z" and from "n" should be configurable using parameter
+        #       masks.
         """
 
         assert len(z) == len(n), "Latent and nuisance number of samples (batch dimension size) must match"
