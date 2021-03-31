@@ -3,14 +3,18 @@ from neural_emulators.CBaseGenerativeNeuralEmulator import CBaseGenerativeNeural
 
 
 class CGenerativeModelNeuralEmulator(CBaseGenerativeNeuralEmulator):
-    def __init__(self, model):
+    # def __init__(self, model):
+    def __init__(self, model, device='cpu'):  # RC: added input to be able to have both receiving tensor and model on the same device
         super(CGenerativeModelNeuralEmulator, self).__init__()
         self.model = None           # Neural Emulator Neural Network
         self.model_path = model     # Path to the saved neural network file
         self.output_dims = None
         self.input_dims = None
+        self.device = device   # RC: added property to be able to have both receiving tensor and model on the same device
         self.initialize(model)
         self.NN_result = t_tensor([])
+        self.NN_result.to(self.device)
+
 
     @staticmethod
     def get_name():
@@ -18,7 +22,7 @@ class CGenerativeModelNeuralEmulator(CBaseGenerativeNeuralEmulator):
 
     def initialize(self, model):
         try:
-            self.model = torch.load(model, map_location='cpu')
+            self.model = torch.load(model, map_location=self.device)
             self.output_dims = self.model.output_dim
             self.input_dims = self.model.input_dim
         except FileNotFoundError:
@@ -26,7 +30,8 @@ class CGenerativeModelNeuralEmulator(CBaseGenerativeNeuralEmulator):
             self.model = None
 
     def generate(self, z, n):
-        self.NN_result = self.model(t_tensor(z))
+        # self.NN_result = self.model(t_tensor(z))
+        self.NN_result = self.model(z)  # RC: removed t_tensor because it seems that z is already a tensor
         return self.NN_result[:, 0:int(self.output_dims)]
 
     def move_to_device(self, device):
