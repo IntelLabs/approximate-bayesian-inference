@@ -101,6 +101,8 @@ if __name__ == "__main__":
     n_dims = 3  # Point dimensionality
     make_plot = True  # Create a 3D plot of each inference step
     n_samples = 512
+    sample_rate = 30
+    traj_duration = 3.2
     #################################################################################
     #################################################################################
 
@@ -139,7 +141,7 @@ if __name__ == "__main__":
     # GENERATIVE MODEL SIMULATOR (also used for visualization)
     #################################################################################
     print("Load generative model: Simulator")
-    simulator_params = create_sim_params(sim_viz=sim_viz)
+    simulator_params = create_sim_params(sim_viz=sim_viz, sample_rate=sample_rate, sim_time=traj_duration)
     scene_with_cabinet_and_two_objects(simulator_params)
     gen_model_sim = CGenerativeModelSimulator(simulator_params)
     #################################################################################
@@ -226,8 +228,8 @@ if __name__ == "__main__":
     gen_model = gen_model_neural_emulator
     # gen_model = gen_model_sim
     # neInference = neInferenceGrid
-    # neInference = neInferenceTPAIS
-    neInference = neInferenceMH
+    neInference = neInferenceTPAIS
+    # neInference = neInferenceMH
     #################################################################################
     #################################################################################
 
@@ -327,6 +329,7 @@ if __name__ == "__main__":
         #                                                             slacks=inference_slacks)
         runtime = time.time() - t_inference
         print("Done. Obtained %d samples in %fs" % (len(samples), runtime))
+        print(neInference.get_stats())
 
         # Compute the maximum a posteriori particle, without considering multiple slacks
         idx = np.argmax(weights)
