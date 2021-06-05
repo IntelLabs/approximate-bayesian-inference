@@ -128,7 +128,7 @@ class CPotentialFieldController(CController):
         self.model = 0
         self.eef_link = 0
         self.obstacles = []
-        self.max_dist = 0.2
+        self.max_dist = 0.3
         self.sim_id = 0
 
     def set_model(self, model, eef_link, physicsClientId=0):
@@ -190,8 +190,8 @@ class CPotentialFieldController(CController):
             # cmd_rep -= cdir * min(1., 1. / (s * dist * dist))
 
             # Exponential potential
-            s = 0.018
-            cmd_rep -= cdir * 10 * s * s * np.exp(-0.5 * (dist / s) * (dist / s)) / (s * np.sqrt(2 * np.pi))
+            s = 0.2
+            cmd_rep -= cdir * 2 * s * s * np.exp(-0.5 * (dist / s) * (dist / s)) / (s * np.sqrt(2 * np.pi))
 
             # draw_line(cpoint[6], cpoint[5], lifetime=.2)
             # draw_line(cpoint[5], np.array(cpoint[5]) + cdir*dist, lifetime=.2, color=[0, 0, 1])
