@@ -13,6 +13,13 @@ from pathlib import Path
 from os import sep
 
 
+def scene_with_ur5table(gen_model_params):
+    gen_model_params["objects"]["path"] = ["pybullet_models/ur5_table/ur5_table.urdf"]
+    gen_model_params["objects"]["pos"] = [[0.1, .77, 0]]
+    gen_model_params["objects"]["rot"] = [[0, 0, 0, 1]]
+    gen_model_params["objects"]["static"] = [True]
+
+
 def scene_with_table(gen_model_params):
     gen_model_params["objects"]["path"] = ["pybullet_models/table/table.urdf"]
     gen_model_params["objects"]["pos"] = [[0.6, 0, -0.65]]
@@ -57,9 +64,11 @@ def scene_with_cabinet_and_two_objects(gen_model_params):
 
 
 def create_sim_params(sim_viz=True, sim_timestep=0.01, sim_time=5.0,
-                      model_path="pybullet_models/human_torso/model.urdf", sample_rate=30):
+                      model_path="pybullet_models/human_torso/model.urdf", sample_rate=30,
+                      model_pose=((0, 0, 0), (0, 0, 0, 1))):
     simulator_params = dict()
     simulator_params["robot_model_path"] = model_path
+    simulator_params["robot_model_pose"] = model_pose
     simulator_params["visualization"] = sim_viz
     simulator_params["timestep"] = sim_timestep
     simulator_params["episode_time"] = sim_time
@@ -98,6 +107,7 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
         self.eef_link = 0
         self.current_time = 0
         self.model_path = sim_params["robot_model_path"]
+        self.model_pose = sim_params["robot_model_pose"]
         self.visualize = sim_params["visualization"]
         self.timestep = sim_params["timestep"]
         self.sim_time = sim_params["episode_time"]
@@ -113,19 +123,22 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
         self.camera = sim_params["camera"]
         self.model = self.Model(self.generate, 4, self.sim_time * self.sample_rate * 3, self.device)
         self.coll_disable_pairs = []
-        self.initialize(self.model_path, self.visualize, self.timestep, self.sim_time)
+        self.initialize(self.model_path, self.visualize, self.timestep, self.sim_time, self.model_pose)
 
     @staticmethod
     def get_name():
         return "sim"
 
-    def initialize(self, model, visualization=False, timestep=0.01, sim_time=5.0):
+    def initialize(self, model, visualization=False, timestep=0.01, sim_time=5.0,
+                   model_pose=((0, 0, 0), (0, 0, 0, 1))):
         self.init_physics(visualization, timestep)
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0)
         p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
         p.resetSimulation(physicsClientId=self.sim_id)
-        self.model_id = p.loadURDF(model, useFixedBase=1, physicsClientId=self.sim_id, flags=p.URDF_USE_SELF_COLLISION)
-        self.coll_disable_pairs = pb.disable_always_on_self_collisions(self.model_id, physicsClientId=self.sim_id, rate=0.8, iterations=1000, debug=False)
+        self.model_id = p.loadURDF(model, basePosition=model_pose[0], baseOrientation=model_pose[1],
+                                   useFixedBase=1, physicsClientId=self.sim_id, flags=p.URDF_USE_SELF_COLLISION)
+        self.coll_disable_pairs = pb.disable_always_on_self_collisions(self.model_id, physicsClientId=self.sim_id,
+                                                                       rate=0.8, iterations=1000, debug=False)
 
         # self.eef_link = p.getNumJoints(self.model_id, physicsClientId=self.sim_id) - 1
         act_joint_idx = pb.get_actuable_joint_indices(self.model_id, physicsClientId=self.sim_id)
@@ -150,8 +163,10 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
         joint_indices = pb.get_actuable_joint_indices(self.model_id, self.sim_id)
         # joint_rest_positions = t_tensor(torch.zeros(len(joint_indices)))
         joint_rest_positions = np.zeros(len(joint_indices))
-        joint_rest_positions[5] = -.5  # Elbow at 60 deg
-        joint_rest_positions[6] = 1.57   # Palm down
+        joint_rest_positions[2] = .3  # Shoulder lift down
+        joint_rest_positions[4] = -.3  # Shoulder lift down
+        joint_rest_positions[5] = -.2  # Elbow flexion
+        joint_rest_positions[6] = 1.57  # Palm down
         self.joint_rest_positions = joint_rest_positions
         pb.set_joint_angles(self.model_id, self.joint_rest_positions, physicsClientId=self.sim_id)
 
@@ -161,7 +176,8 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
                                      self.camera["target"])
         p.resetSimulation(physicsClientId=self.sim_id)
         p.setGravity(0, 0, -9.81, physicsClientId=self.sim_id)
-        self.model_id = p.loadURDF(self.model_path, useFixedBase=1, physicsClientId=self.sim_id, flags=p.URDF_USE_SELF_COLLISION)
+        self.model_id = p.loadURDF(self.model_path, useFixedBase=1, physicsClientId=self.sim_id,
+                                   flags=p.URDF_USE_SELF_COLLISION)
         pb.set_joint_angles(self.model_id, self.joint_rest_positions, physicsClientId=self.sim_id)
         for pair in self.coll_disable_pairs:
             p.setCollisionFilterPair(bodyUniqueIdA=self.model_id, bodyUniqueIdB=self.model_id, linkIndexA=pair[0],
@@ -194,9 +210,9 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
         # The parameters are passed to a neural network in mini-batches. Iterate through the minibatch
         # and generate all desired trajectories
         for i in range(len(z)):
-            goal = t_tensor(z[i])        # Goal hand position (x,y,z)
+            goal = t_tensor(z[i])  # Goal hand position (x,y,z)
             start = t_tensor(n[i, 0:3])  # Starting hand position (x,y,z)
-            K = t_tensor(n[i, 3:])       # Controller parameters (Kp Ki Kd iClamp Krep)
+            K = t_tensor(n[i, 3:])  # Controller parameters (Kp Ki Kd iClamp Krep)
 
             # Obtain initial joint values corresponding to the start cartesian position
             # joint_vals = pb.get_actuable_joint_angles(self.model_id, physicsClientId=self.sim_id) # Use this for generating ik solutions that start at the current position
@@ -209,9 +225,10 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
             goal_threshold = 0.03
             timeout = self.sim_time
             [plan_joint, plan_cart] = self.get_plan(joints_ik, goal, self.model_id, self.eef_link, K,
-                                                    goal_threshold, timeout, self.obstacles, physicsClientId=self.sim_id)
+                                                    goal_threshold, timeout, self.obstacles,
+                                                    physicsClientId=self.sim_id)
 
-            res = resample_trajectory(plan_cart, 1/self.timestep, self.sample_rate)
+            res = resample_trajectory(plan_cart, 1 / self.timestep, self.sample_rate)
             trajs = torch.cat((trajs, res))
 
         return trajs.view(len(z), -1)
@@ -239,7 +256,8 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
 
             # Generate a probable control sequence that achieves the goal
             plan_cart = self.generate(params.view(1, -1))
-            print("sample #", len(output_cart) + 1, " goal: ", goal, " K: ", controller_gain, " plan size:", len(plan_cart[0]/3),
+            print("sample #", len(output_cart) + 1, " goal: ", goal, " K: ", controller_gain, " plan size:",
+                  len(plan_cart[0] / 3),
                   " time: ", "%f" % (time.time() - time_ini))
 
             if len(plan_cart) > 0:
@@ -293,14 +311,15 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
         p.stepSimulation(physicsClientId=physicsClientId)
         self.current_time = self.current_time + self.timestep
 
-    def get_plan(self, ini_state, goal, model, eef_link, K, goal_threshold=0.01, timeout=10.0, obstacles=[], physicsClientId=0):
+    def get_plan(self, ini_state, goal, model, eef_link, K, goal_threshold=0.01, timeout=10.0, obstacles=[],
+                 physicsClientId=0):
         self.current_time = 0
         plan = []
         plan_cart = t_tensor()
 
         # Move the joints to the starting state
         indices = pb.get_actuable_joint_indices(model, physicsClientId=physicsClientId)
-        for i,idx in enumerate(indices):
+        for i, idx in enumerate(indices):
             p.resetJointState(model, idx, ini_state[i], physicsClientId=physicsClientId)
 
         is_goal_satisfied = False
@@ -320,7 +339,8 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
 
         # Reach for a via-point inbetween
         current = pb.get_eef_pose(model, eef_link, physicsClientId)
-        via_point = t_tensor([current[0] + (goal[0] - current[0])/2, current[1] + (goal[1] - current[1])/2, goal[2]+0.2])
+        via_point = t_tensor(
+            [current[0] + (goal[0] - current[0]) / 2, current[1] + (goal[1] - current[1]) / 2, goal[2] + 0.2])
         via_point_satisfied = True
         real_goal = goal
         # goal = via_point
@@ -353,7 +373,7 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
 
             # if x_err_mod < goal_threshold or self.current_time >= timeout:
             if self.current_time >= timeout:
-                    is_goal_satisfied = True
+                is_goal_satisfied = True
 
             self.step_plan_potential_field(model, goal, eef_link, obstacles, K, physicsClientId)
 
@@ -361,9 +381,12 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
                 p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0)
                 for obj_id in debug_traj:
                     p.removeUserDebugItem(obj_id, physicsClientId=physicsClientId)
-                debug_traj = draw_trajectory(plan_cart.view(-1,3), [0, 1, 0], 4, physicsClientId=physicsClientId, draw_points=False)
+                debug_traj = draw_trajectory(plan_cart.view(-1, 3), [0, 1, 0], 4, physicsClientId=physicsClientId,
+                                             draw_points=False)
                 if len(self.controller.ctrl.err_int) > 0:
-                    debug_traj.append(p.addUserDebugText("t = %.2f err_int=[%.2f,%.2f,%.2f]" % (self.current_time, self.controller.ctrl.err_int[0],self.controller.ctrl.err_int[1],self.controller.ctrl.err_int[2]), [0, 0, 1.0], physicsClientId=physicsClientId))
+                    debug_traj.append(p.addUserDebugText("t = %.2f err_int=[%.2f,%.2f,%.2f]" % (
+                        self.current_time, self.controller.ctrl.err_int[0], self.controller.ctrl.err_int[1],
+                        self.controller.ctrl.err_int[2]), [0, 0, 1.0], physicsClientId=physicsClientId))
                 p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1)
                 # elapsed_time = time.time() - t_ini
                 # t_sleep = self.timestep - elapsed_time
@@ -393,21 +416,31 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
         p.setGravity(0, 0, -9.81, physicsClientId=self.sim_id)
 
         p.setPhysicsEngineParameter(
-            fixedTimeStep=timestep,                 # Physics engine timestep in fraction of seconds, each time you call 'stepSimulation'.Same as 'setTimeStep'
-            numSolverIterations=100,                # Choose the number of constraint solver iterations.
-            useSplitImpulse=0,                      # Advanced feature, only when using maximal coordinates: split the positional constraint solving and velocity constraint solving in two stages, to prevent huge penetration recovery forces.
-            splitImpulsePenetrationThreshold=0.01,  # Related to 'useSplitImpulse': if the penetration for a particular contact constraint is less than this specified threshold, no split impulse will happen for that contact.
-            numSubSteps=1,                         # Subdivide the physics simulation step further by 'numSubSteps'. This will trade performance over accuracy.
-            collisionFilterMode=0,                  # Use 0 for default collision filter: (group A&maskB) AND (groupB&maskA). Use 1 to switch to the OR collision filter: (group A&maskB) OR (groupB&maskA)
-            contactBreakingThreshold=0.02,          # Contact points with distance exceeding this threshold are not processed by the LCP solver. In addition, AABBs are extended by this number. Defaults to 0.02 in Bullet 2.x.
-            maxNumCmdPer1ms=0,                      # Experimental: add 1ms sleep if the number of commands executed exceed this threshold.
-            enableFileCaching=1,                    # Set to 0 to disable file caching, such as .obj wavefront file loading
-            restitutionVelocityThreshold=0.01,      # If relative velocity is below this threshold, restitution will be zero.
-            erp=0.8,                                # Constraint error reduction parameter (non-contact, non-friction) Details: http://www.ode.org/ode-latest-userguide.html#sec_3_7_0
-            contactERP=0.2,                         # Contact error reduction parameter
-            frictionERP=0.2,                        # Friction error reduction parameter (when positional friction anchors are enabled)
-            enableConeFriction=0,                   # Set to 0 to disable implicit cone friction and use pyramid approximation (cone is default)
-            deterministicOverlappingPairs=0,        # Set to 0 to disable sorting of overlapping pairs (backward compatibility setting).
+            fixedTimeStep=timestep,
+            # Physics engine timestep in fraction of seconds, each time you call 'stepSimulation'.Same as 'setTimeStep'
+            numSolverIterations=100,  # Choose the number of constraint solver iterations.
+            useSplitImpulse=0,
+            # Advanced feature, only when using maximal coordinates: split the positional constraint solving and velocity constraint solving in two stages, to prevent huge penetration recovery forces.
+            splitImpulsePenetrationThreshold=0.01,
+            # Related to 'useSplitImpulse': if the penetration for a particular contact constraint is less than this specified threshold, no split impulse will happen for that contact.
+            numSubSteps=1,
+            # Subdivide the physics simulation step further by 'numSubSteps'. This will trade performance over accuracy.
+            collisionFilterMode=0,
+            # Use 0 for default collision filter: (group A&maskB) AND (groupB&maskA). Use 1 to switch to the OR collision filter: (group A&maskB) OR (groupB&maskA)
+            contactBreakingThreshold=0.02,
+            # Contact points with distance exceeding this threshold are not processed by the LCP solver. In addition, AABBs are extended by this number. Defaults to 0.02 in Bullet 2.x.
+            maxNumCmdPer1ms=0,  # Experimental: add 1ms sleep if the number of commands executed exceed this threshold.
+            enableFileCaching=1,  # Set to 0 to disable file caching, such as .obj wavefront file loading
+            restitutionVelocityThreshold=0.01,
+            # If relative velocity is below this threshold, restitution will be zero.
+            erp=0.8,
+            # Constraint error reduction parameter (non-contact, non-friction) Details: http://www.ode.org/ode-latest-userguide.html#sec_3_7_0
+            contactERP=0.2,  # Contact error reduction parameter
+            frictionERP=0.2,  # Friction error reduction parameter (when positional friction anchors are enabled)
+            enableConeFriction=0,
+            # Set to 0 to disable implicit cone friction and use pyramid approximation (cone is default)
+            deterministicOverlappingPairs=0,
+            # Set to 0 to disable sorting of overlapping pairs (backward compatibility setting).
             physicsClientId=self.sim_id
         )
 
