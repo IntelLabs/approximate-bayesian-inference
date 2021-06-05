@@ -163,10 +163,10 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
         joint_indices = pb.get_actuable_joint_indices(self.model_id, self.sim_id)
         # joint_rest_positions = t_tensor(torch.zeros(len(joint_indices)))
         joint_rest_positions = np.zeros(len(joint_indices))
-        joint_rest_positions[2] = .3  # Shoulder lift down
-        joint_rest_positions[4] = -.3  # Shoulder lift down
-        joint_rest_positions[5] = -.2  # Elbow flexion
-        joint_rest_positions[6] = 1.57  # Palm down
+        joint_rest_positions[4] = .3  # Shoulder lift down
+        joint_rest_positions[5] = -.3  # Shoulder lift down
+        joint_rest_positions[7] = -.2  # Elbow flexion
+        joint_rest_positions[8] = 1.57  # Palm down
         self.joint_rest_positions = joint_rest_positions
         pb.set_joint_angles(self.model_id, self.joint_rest_positions, physicsClientId=self.sim_id)
 
