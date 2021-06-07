@@ -36,6 +36,7 @@ from utils.draw import draw_trajectory_diff
 from utils.draw import draw_point
 from utils.draw import draw_text
 from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_table
+from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_ur5table
 
 # import mss  # For screenshots
 
@@ -67,12 +68,14 @@ output_dim = n_points * n_dims
 
 # Neural Surrogate architecture description
 activation = torch.relu
+# nn_layers = 4
+# nn_layer_dims = [torch.count_nonzero(latent_mask), 32, 64, 64, output_dim]
 nn_layers = 3
 nn_layer_dims = [torch.count_nonzero(latent_mask), 32, 64, output_dim]
 loss_f = loss_MSE
 
 # Model filename
-nn_model_path = "pytorch_models/ne_fc%d_10k3D_MSE_in%d_out%d.pt" % (nn_layers, input_dim, output_dim)
+nn_model_path = "pytorch_models/ne_fc%d_10k2D_MSE_in%d_out%d.pt" % (nn_layers, input_dim, output_dim)
 
 
 ###################################
@@ -82,13 +85,13 @@ nn_model_path = "pytorch_models/ne_fc%d_10k3D_MSE_in%d_out%d.pt" % (nn_layers, i
 load_existing_model = False
 
 # Dataset to use
-dataset_path = "datasets/dataset10K_3D_96p.dat"
+dataset_path = "datasets/dataset10K_2D_ur5_96p.dat"
 # Portion (0. - 1.) of the dataset used for training. The remainder will be used for testing.
 train_percentage = 0.9
 
 # Training stops once the loss is below the threshold or the max_train_epochs are reached
 train_loss_threshold = 0.0001
-max_train_epochs = 100
+max_train_epochs = 1000
 
 # controls the number of times that the training dataset is gone over on each train call
 train_epochs = 1
@@ -104,7 +107,8 @@ noise_sigma = 0.0001
 ###############
 # GENERIC CODE
 ###############
-device = "cuda:0" if torch.cuda.is_available() else "cpu"
+# device = "cuda:0" if torch.cuda.is_available() else "cpu"
+device = "cpu"
 
 neNEmulator = CGenerativeModelNeuralEmulator(nn_model_path, device)  # Neural emulator for the likelihood function
 
@@ -128,7 +132,8 @@ neNEmulator.input_dims = input_dim
 if viz_debug:
     # Load simulator for visualization purposes only
     simulator_params = create_sim_params(sim_time=sim_time, sample_rate=sample_rate)
-    scene_with_table(simulator_params)
+    # scene_with_table(simulator_params)
+    scene_with_ur5table(simulator_params)
     neSimulator = CGenerativeModelSimulator(simulator_params)
 
 # Check if the NeuralEmulator is trained. Train it otherwise.

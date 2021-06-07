@@ -7,31 +7,20 @@ from reaching_intent.generative_models.CGenerativeModelSimulator import CGenerat
 from utils.draw import draw_trajectory
 from utils.draw import draw_text
 from reaching_intent.generative_models.CReachingDataset import CReachingDataset
-
+from reaching_intent.generative_models.CGenerativeModelSimulator import create_sim_params
+from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_ur5table
 
 # Script configuration
-dataset_path = "datasets/dataset10K_3D.dat"
+dataset_path = "datasets/dataset10K_2D_ur5_96p.dat"
 sample_rate = 30
-noise_sigma = 0.005  # Noise added to the dataset trajectories
+sim_time = 3.2      # Duration of the simulated trajectories
+noise_sigma = 0.001  # Noise added to the dataset trajectories
 model_path = "pybullet_models/human_torso/model.urdf"
 
-
 # Load simulator
-simulator_params = dict()
-simulator_params["robot_model_path"] = model_path
-simulator_params["visualization"] = True
-simulator_params["timestep"] = 0.01
-simulator_params["episode_time"] = 3.0
-simulator_params["sample_rate"] = sample_rate
-simulator_params["sim_id"] = 0
-simulator_params["robot_controller"] = None
-simulator_objects = dict()
-simulator_objects["path"] = ["pybullet_models/table/table.urdf"]
-simulator_objects["pos"] = [[0.6, 0, -0.65]]
-simulator_objects["rot"] = [[0, 0, 0, 1]]
-simulator_objects["static"] = [True]
-simulator_params["objects"] = simulator_objects
-neSimulator = CGenerativeModelSimulator(simulator_params)    # Simulator used to generate synthetic data
+simulator_params = create_sim_params(sim_time=sim_time, sample_rate=sample_rate)
+scene_with_ur5table(simulator_params)
+neSimulator = CGenerativeModelSimulator(simulator_params)  # Simulator used to generate synthetic data
 
 dataset = CReachingDataset(filename=dataset_path, noise_sigma=noise_sigma,
                            dataset_sample_rate=sample_rate, output_sample_rate=sample_rate,
@@ -44,7 +33,8 @@ while p.isConnected(physicsClientId=neSimulator.sim_id):
     # Show a random trajectory
     idx = np.random.randint(0, len(dataset))
     dataset_traj = dataset.samples[idx][1]
-    draw_trajectory(dataset_traj.view(-1, 3), color=[1, 1, 0], width=2, physicsClientId=neSimulator.sim_id, draw_points=True)
+    draw_trajectory(dataset_traj.view(-1, 3), color=[1, 1, 0], width=2, physicsClientId=neSimulator.sim_id,
+                    draw_points=True)
     draw_text("  Trajectory id: " + str(idx), dataset_traj[0:3], visualizer=neSimulator.sim_id)
 
     keys = p.getKeyboardEvents(physicsClientId=neSimulator.sim_id)

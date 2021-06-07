@@ -4,6 +4,7 @@ import time
 import pybullet
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+import pandas as pd
 from mpl_toolkits.mplot3d import Axes3D
 
 from common.common import *
@@ -12,6 +13,7 @@ from reaching_intent.generative_models.CGenerativeModelSimulator import create_s
 from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_cabinet_and_two_objects
 from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_table
 from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_cabinet
+from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_ur5table
 
 from neural_emulators.CGenerativeModelNeuralEmulator import CGenerativeModelNeuralEmulator
 from samplers.CSamplerUniform import CSamplerUniform
@@ -61,7 +63,7 @@ if __name__ == "__main__":
     sim_viz = False  # Show visualization of the simulator
     n_dims = 3  # Point dimensionality
     make_plot = True  # Create a 3D plot of each inference step
-    n_samples = 512
+    n_samples = 100
     sample_rate = 30
     traj_duration = 3.2
     #################################################################################
@@ -72,8 +74,8 @@ if __name__ == "__main__":
     #################################################################################
     print("Set latent and nuisance spaces.")
     # Generative model parameter limits: start volume (x,y,z), end volume (x,y,z), controller(Kp,Ki,Kd,Krep,iClamp)
-    param_limits_min = t_tensor([-0.06, 0.30, -0.10, 0.25, -0.4, 0.20, 5, 0.0, 0, 0, 90.0])
-    param_limits_max = t_tensor([-0.05, 0.31, -0.09, 0.90, 0.4, 0.60, 20, 0.01, 1.0, 2, 100.0])
+    param_limits_min = t_tensor([-0.06, 0.30, -0.10, 0.15, -0.3, 0.05, 1, 0.0, 0, 0.10, 0])
+    param_limits_max = t_tensor([-0.05, 0.31, -0.09, 0.80, 0.7, 0.06, 10, 1.0, 10, 0.35, 2])
 
     # Select the parameters that are considered nuisance and the parameters that are considered interesting
     latent_mask = t_tensor([0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0]) == 1  # We are interested in the end position
@@ -92,9 +94,10 @@ if __name__ == "__main__":
     #################################################################################
     # SLACK GRID EVALUATION POINTS
     #################################################################################
-    num_slacks = 20
-    inference_slacks = torch.arange(1E-2, 20.0, 20.0 / num_slacks).double()
-    inference_slacks = torch.exp(inference_slacks) * 1E-2
+    # num_slacks = 20
+    # inference_slacks = torch.arange(1E-2, 20.0, 20.0 / num_slacks).double()
+    # inference_slacks = torch.exp(inference_slacks) * 1E-2
+    inference_slacks = np.array([[0.3]])
     #################################################################################
     #################################################################################
 
@@ -103,7 +106,7 @@ if __name__ == "__main__":
     #################################################################################
     print("Load generative model: Simulator")
     simulator_params = create_sim_params(sim_viz=sim_viz, sample_rate=sample_rate, sim_time=traj_duration)
-    scene_with_cabinet_and_two_objects(simulator_params)
+    scene_with_ur5table(simulator_params)
     gen_model_sim = CGenerativeModelSimulator(simulator_params)
     #################################################################################
     #################################################################################
@@ -112,7 +115,7 @@ if __name__ == "__main__":
     # GENERATIVE MODEL NEURAL EMULATOR
     #################################################################################
     print("Load generative model: Neural Surrogate")
-    nn_model_path = "pytorch_models/ne_fc3_10k3D_MSE_in11_out288.pt"
+    nn_model_path = "pytorch_models/ne_fc4_10k2D_MSE_in11_out288.pt"
     gen_model_neural_emulator = CGenerativeModelNeuralEmulator(nn_model_path)
     #################################################################################
     #################################################################################
@@ -132,12 +135,12 @@ if __name__ == "__main__":
     print("Prepare observation model")
     observer_params = copy.deepcopy(simulator_params)
     observer_params["sigma"] = 0.001  # Additional gaussian noise added to observed trajectories
-    observer_params["dataset_path"] = "./datasets/dataset10K_3D_96p.dat"
+    observer_params["dataset_path"] = "./datasets/dataset10K_2D_ur5_96p.dat"
     observer_params["min_points"] = 3
     observer_params["obs_dimensions"] = 3
     observer_params["num_trajs"] = 100
     obs_model = CObservationModelDataset(observer_params)
-    obs_model.new_trajectory(12)
+    # obs_model.new_trajectory(12)
     #################################################################################
     #################################################################################
 
@@ -145,10 +148,11 @@ if __name__ == "__main__":
     # INFERENCE ALGORITHM (Grid)
     #################################################################################
     neInferenceGrid = CInferenceGrid()
+    neInferenceGrid.name = "grid"
     inference_params = dict()
     inference_params["z_min"] = z_min
     inference_params["z_max"] = z_max
-    inference_params["resolution"] = 0.04
+    inference_params["resolution"] = 0.01
     #################################################################################
     #################################################################################
 
@@ -160,9 +164,9 @@ if __name__ == "__main__":
     inference_params["ess_target"] = 0.8
     inference_params["n_min"] = 5
     inference_params["method"] = "simple"
-    inference_params["resampling"] = "none"
+    inference_params["resampling"] = "leaf"
     inference_params["kernel"] = "haar"
-    inference_params["dims"] = 3
+    inference_params["dims"] = len(z_min)
     inference_params["parallel_samples"] = 32
     neInferenceTPAIS = CTreePyramidSampling(inference_params)
     #################################################################################
@@ -177,7 +181,7 @@ if __name__ == "__main__":
     inference_params["kde_bw"] = 0.01
     inference_params["proposal_sigma"] = 0.01
     inference_params["n_steps"] = 1
-    inference_params["dims"] = 3
+    inference_params["dims"] = len(z_min)
     inference_params["n_burnin"] = 10
     neInferenceMH = CMetropolisHastings(inference_params)
     #################################################################################
@@ -188,8 +192,8 @@ if __name__ == "__main__":
     #################################################################################
     gen_model = gen_model_neural_emulator
     # gen_model = gen_model_sim
-    # neInference = neInferenceGrid
-    neInference = neInferenceTPAIS
+    neInference = neInferenceGrid
+    # neInference = neInferenceTPAIS
     # neInference = neInferenceMH
     #################################################################################
     #################################################################################
@@ -213,7 +217,7 @@ if __name__ == "__main__":
     #################################################################################
     # VISUALIZATION and RESULTS
     #################################################################################
-    if sim_viz is not None:
+    if sim_viz:
         visualizer = gen_model_sim.sim_id
     else:
         visualizer = None
@@ -241,10 +245,11 @@ if __name__ == "__main__":
     viz_items = []
     iteration = 0
     # z = prior_distribution.sample(1, None)
+    frame = None
     while obs_model.is_ready():
         # Obtain observation and initialize latent space and nuisance values from their priors
         o = obs_model.get_observation()
-        set_eef_position(o[-n_dims:], gen_model_sim.model_id, gen_model_sim.eef_link, physicsClientId=visualizer)
+        set_eef_position(o[-n_dims:], gen_model_sim.model_id, gen_model_sim.eef_link, physicsClientId=gen_model_sim.sim_id)
         z = prior_distribution.sample(1, None)
         n = nuisance_sampler.sample(1, None)
 
@@ -262,35 +267,40 @@ if __name__ == "__main__":
 
         print("Run inference with %d observed points." % (len(o) / n_dims))
         t_inference = time.time()
-        target_d_params = dict()
-        target_d_params["dims"] = 3
-        target_d_params["likelihood_f"] = lambda x: np.exp(loglikelihood_f(x))
-        target_d_params["loglikelihood_f"] = loglikelihood_f
-        target_d_params["support"] = [z_min.numpy(), z_max.numpy()]
-        target_d_params["prior_d"] = CMultivariateUniform({"center": (z_max.numpy() + z_min.numpy()) / 2,
-                                                           "radius": (z_max.numpy() - z_min.numpy()) / 2})
-        target_d_params["sensor_d"] = CMultivariateDelta({"center": o.numpy(),
-                                                          "support": [o.numpy() - 1, o.numpy() + 1]})
-        target_d_params["gen_d"] = gen_dist
-        target_d_params["slack"] = np.array([0.05])
-        target_d = ABCDistribution(target_d_params)
-        target_d.condition(o.numpy())
+        # target_d_params = dict()
+        # target_d_params["dims"] = 3
+        # target_d_params["likelihood_f"] = lambda x: np.exp(loglikelihood_f(x))
+        # target_d_params["loglikelihood_f"] = loglikelihood_f
+        # target_d_params["support"] = [z_min.numpy(), z_max.numpy()]
+        # target_d_params["prior_d"] = CMultivariateUniform({"center": (z_max.numpy() + z_min.numpy()) / 2,
+        #                                                    "radius": (z_max.numpy() - z_min.numpy()) / 2})
+        # target_d_params["sensor_d"] = CMultivariateDelta({"center": o.numpy(),
+        #                                                   "support": [o.numpy() - 1, o.numpy() + 1]})
+        # target_d_params["gen_d"] = gen_dist
+        # target_d_params["slack"] = np.array([0.1])
+        # target_d = ABCDistribution(target_d_params)
+        # target_d.condition(o.numpy())
 
-        # target_d = CGaussianMixtureModel({"means": [[0.7, 0.0, 0.5], [0.3, 0.2, 0.3], [0.3, -0.2, 0.25]],
-        #                                   "sigmas": [[0.001, 0.001, 0.001], [0.001, 0.001, 0.001],
-        #                                              [0.001, 0.001, 0.001]],
-        #                                   "weights": [0.3, 0.3, 0.4],
-        #                                   "support": [[0.0, -0.6, 0.20], [1.20, 0.6, 0.80]]})
-        neInference.reset()
-        samples, weights = neInference.importance_sample(target_d, n_samples, timeout=60.0)
-        # samples, likelihoods, stats = neInference.inference(obs=o, proposal=z, nuisance=n,
-        #                                                             gen_model=gen_model,
-        #                                                             likelihood_f=likelihood_f,
-        #                                                             params=inference_params,
-        #                                                             slacks=inference_slacks)
+        # neInference.reset()
+        # samples, weights = neInference.importance_sample(target_d, n_samples, timeout=60.0)
+        samples, weights, stats = neInference.inference(obs=o, nuisance=n,
+                                                        gen_model=gen_model,
+                                                        likelihood_f=loglikelihood_f,
+                                                        params=inference_params,
+                                                        slacks=inference_slacks)
         runtime = time.time() - t_inference
         print("Done. Obtained %d samples in %fs" % (len(samples), runtime))
-        print(neInference.get_stats())
+
+        # AGGREGATED STATS FROM EACH FRAME
+        stats = neInference.get_stats()
+        stats["time"] = runtime
+        if frame is None:
+            frame = [list(stats.values())]
+        else:
+            frame.append(list(stats.values()))
+        df = pd.DataFrame(data=frame, columns=stats.keys())
+        df_stats = df.mean().append(df.std(), )
+        print(df_stats)
 
         # Compute the maximum a posteriori particle, without considering multiple slacks
         idx = np.argmax(weights)
@@ -299,7 +309,7 @@ if __name__ == "__main__":
         error = torch.sqrt(torch.sum(diff * diff))
         traj_percent = float(len(o)) / len(obs_model.get_ground_truth_trajectory())
 
-        # TODO: REACTIVATE SAMPLING STATS
+        # TODO: REACTIVATE SAMPLING STATS OF ACTIVE FRAME
         #################################################################################
         # Evaluation and stats
         #  1 - L2 norm of the MAP predicted z and the ground truth z
@@ -334,9 +344,9 @@ if __name__ == "__main__":
         #                                                                     stats["nsamples"]))
 
         if visualizer is not None:
-            # for s in samples:
-            #     viz_items.extend(draw_point(s, [0, 0, 1], size=0.01, width=2, physicsClientId=visualizer, lifetime=1.0))
-            #     draw_point(s, [0, 0, 1], size=0.01, width=2, physicsClientId=visualizer, lifetime=10.0)
+            for s in samples:
+                viz_items.extend(draw_point(s, [0, 0, 1], size=0.01, width=2, physicsClientId=visualizer))
+                # draw_point(s, [0, 0, 1], size=0.01, width=2, physicsClientId=visualizer, lifetime=10.0)
             viz_items.extend(draw_point(MAP_z, [1, 0, 0], size=0.05, width=5, physicsClientId=visualizer))
             # Draw generated trajectory for the GT point
             gen_traj = gen_model.generate(MAP_z.reshape(1, -1), n.view(1, -1))
@@ -351,13 +361,16 @@ if __name__ == "__main__":
             ax.set_xlim(-.2, 1)
             ax.set_ylim(-.7, .7)
             ax.set_zlim(0, 1)
-            viz_indices = weights > -10
+            viz_indices = weights > -100
             samples_viz = samples[viz_indices]
             colors = cm.hot(np.exp((weights - weights.max())))
             alphas = np.exp((weights - weights.max()))
             colors[:, 3] = np.clip(alphas, 0.05, 1.0)
-            # ax.scatter(xs=samples_viz[:, 0], ys=samples_viz[:, 1], zs=samples_viz[:, 2], c=colors[viz_indices])
+            ax.scatter(xs=samples_viz[:, 0], ys=samples_viz[:, 1], zs=samples_viz[:, 2], c=colors[viz_indices])
             ax.plot(xs=o.view(-1, n_dims)[:, 0], ys=o.view(-1, n_dims)[:, 1], zs=o.view(-1, n_dims)[:, 2], c='purple')
+
+            gen_traj = gen_model.generate(MAP_z.reshape(1, -1), n.view(1, -1)).cpu().detach()
+            ax.plot(xs=gen_traj.view(-1, n_dims)[:, 0], ys=gen_traj.view(-1, n_dims)[:, 1], zs=gen_traj.view(-1, n_dims)[:, 2], c='red')
             ax.plot(xs=[0, .1], ys=[0, 0], zs=[0, 0], c='r')
             ax.plot(xs=[0, 0], ys=[0, .1], zs=[0, 0], c='g')
             ax.plot(xs=[0, 0], ys=[0, 0], zs=[0, .1], c='b')

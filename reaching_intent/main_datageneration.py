@@ -17,12 +17,13 @@ from reaching_intent.generative_models.CGenerativeModelSimulator import create_s
 from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_cabinet_and_two_objects
 from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_table
 from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_cabinet
+from reaching_intent.generative_models.CGenerativeModelSimulator import scene_with_ur5table
 ###################################
 
 ###################################
 # GENERIC PARAMETERS (tune for each application)
 ###################################
-dataset_path = "datasets/dataset10K_3D_96p.dat"
+dataset_path = "datasets/dataset10K_2D_ur5_96p.dat"
 
 # Desired number of data points that the dataset will contain
 dataset_points = 1e4
@@ -46,8 +47,8 @@ sample_rate = 30    # Samples per second
 sim_time = 3.2      # Duration of the simulated trajectories
 
 # Generative model parameter limits: start volume (x,y,z), end volume (x,y,z), controller(Kp,Ki,Kd,iClamp,Krep)
-param_limits_min = t_tensor([-0.06, 0.30, -0.10, 0.25, -0.4, 0.20, 5, 0.0, 0, 0, 90.0])
-param_limits_max = t_tensor([-0.05, 0.31, -0.09, 0.90, 0.4, 0.60, 20, 0.01, 1.0, 2, 100.0])
+param_limits_min = t_tensor([-0.06, 0.30, -0.10, 0.15, -0.3, 0.05, 15, 0.001, 0.01, 1.9, 19.0])
+param_limits_max = t_tensor([-0.05, 0.31, -0.09, 0.80, 0.7, 0.06, 16, 0.002, 0.02, 2.0, 20.0])
 
 # Select the parameters that are considered nuisance and the parameters that are considered interesting
 latent_mask = t_tensor([0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0]) == 1    # We are interested in the end position
@@ -62,7 +63,7 @@ gen_model_params = create_sim_params(sim_viz=sim_viz,
 # Set up the scene
 # scene_with_cabinet_and_two_objects(gen_model_params)
 # scene_with_cabinet(gen_model_params)
-scene_with_table(gen_model_params)
+scene_with_ur5table(gen_model_params)
 ###################################
 
 
@@ -94,11 +95,12 @@ while dataset_size < dataset_points:
         n = params[:, nuisance_mask]
         generated = gen_model.generate(z, n)
 
+        # TODO: Solve this w/o application specific code
         # THIS IF IS APPLICATION SPECIFIC. CHECKS FOR THE VALIDITY OF THE DATA GENERATED
         # THE FUNCTIONALITY CAN BE EMBEDDED INTO THE GENERATIVE MODEL LOGIC THROUGH ITS CUSTOM PARAMS
         # THAT COULD HAVE A GENERIC SANITY CHECK FOR THE GENERATED DATA
         # Discard trajectories that do not end close to the goal
-        if torch.sqrt(((generated[0][-3:] - z)*(generated[0][-3:] - z)).sum()) > 0.3:
+        if torch.sqrt(((generated[0][-3:] - z)*(generated[0][-3:] - z)).sum()) > 0.10:
             print("invalid trajectory")
             i -= 1
             continue

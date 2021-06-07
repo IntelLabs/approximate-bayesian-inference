@@ -294,7 +294,7 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
 
     def step_plan_ik(self, model, goal, joint_pos, eef_link, K, actuated_joint_list, physicsClientId=0):
         # Set the control action to move the joints towards the target IK
-        q = self.get_ik_solutions(model, eef_link, goal, physicsClientId=physicsClientId)
+        q = self.get_ik_solutions(goal, model, eef_link)
         q_dot = [0] * len(q)
         for i in range(0, len(q)):
             q_dot[i] = (q[i] - joint_pos[actuated_joint_list[i]]) * K
@@ -445,7 +445,7 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
         )
 
     @staticmethod
-    def get_joint_limits(self, model, physicsClientId=0):
+    def get_joint_limits(model, physicsClientId=0):
         joint_info = []
         for i in range(0, p.getNumJoints(model, physicsClientId=physicsClientId)):
             joint_info.append(p.getJointInfo(model, i, physicsClientId=physicsClientId))  # Get all joint limits
@@ -458,7 +458,10 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
 
         return lower_limit, upper_limit
 
-    def get_ik_solutions(self, model, eeffLink, goal, physicsClientId=0):
+    def get_eef_pose(self):
+        return pb.get_eef_position(self.model_id, self.eef_link, self.sim_id)
+
+    def get_ik_solutions(self, goal, model=None, eef_link=None):
         pos = [0, 0, 0]
         rot = [0, 0, 0, 1]
         if len(goal) == 3:
@@ -467,14 +470,27 @@ class CGenerativeModelSimulator(CBaseGenerativeModel):
             pos = goal[0:3]
             rot = goal[3:]
         else:
-            return []
+            raise ValueError(f"Goal must have 3 or 7 values. Received goal={goal}")
 
-        lower, upper = self.get_joint_limits(model, physicsClientId=physicsClientId)
-        rest = [0] * len(lower)
-        ranges = [10000] * len(lower)
-        # for i in range(0, len(lower)):
-        #     ranges.append(upper[i] - lower[i])
+        if model is None:
+            model = self.model_id
 
-        return p.calculateInverseKinematics(model, eeffLink, pos,
-                                            lowerLimits=lower, upperLimits=upper, jointRanges=ranges, restPoses=rest,
-                                            physicsClientId=physicsClientId)
+        if eef_link is None:
+            eef_link = self.eef_link
+
+        lower, upper = pb.get_actuable_joint_limits(model, physicsClientId=self.sim_id)
+        # lower, upper = self.get_joint_limits(model, physicsClientId=self.sim_id)
+        rest = self.joint_rest_positions.tolist()
+        j_damping = [1] * len(lower)
+
+        ranges = [2] * len(lower)
+
+        return p.calculateInverseKinematics(model, eef_link, pos,
+                                            lowerLimits=lower, upperLimits=upper, jointRanges=ranges,
+                                            jointDamping=j_damping, restPoses=rest, residualThreshold=.001,
+                                            physicsClientId=self.sim_id, solver=p.IK_SDLS, maxNumIterations=100)
+
+    def set_joints(self, joint_angles, model=None):
+        if model is None:
+            model = self.model_id
+        pb.set_joint_angles(model, joint_angles, self.sim_id)
