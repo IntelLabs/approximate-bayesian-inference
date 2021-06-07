@@ -150,7 +150,7 @@ Parameters:
     <xacro:property name="palm_depth" value="0.11" />
 
     <xacro:property name="shoulder_abduction_limit" value="3.1415" />
-    <xacro:property name="shoulder_adduction_limit" value="0.1" />
+    <xacro:property name="shoulder_adduction_limit" value="0.0" />
     <xacro:property name="shoulder_abduction_adduction_effort" value="1000.0" />
     <xacro:property name="shoulder_abduction_adduction_velocity" value="2.5" />
 
@@ -406,12 +406,12 @@ Parameters:
 </xacro:macro>
 
 <xacro:macro name="torso_base" params="prefix base_link translate_joint_type rotate_joint_type *origin">
-    <xacro:property name="torso_forward_limit" value="0.1" />
-    <xacro:property name="torso_backward_limit" value="0.2" />
-    <xacro:property name="torso_left_limit" value="0.4" />
-    <xacro:property name="torso_right_limit" value="0.4" />
+    <xacro:property name="torso_forward_limit" value="0.05" />
+    <xacro:property name="torso_backward_limit" value="0.1" />
+    <xacro:property name="torso_left_limit" value="0.2" />
+    <xacro:property name="torso_right_limit" value="0.2" />
     <xacro:property name="torso_forward_tilt_limit" value="0.2" />
-    <xacro:property name="torso_backward_tilt_limit" value="0.2" />
+    <xacro:property name="torso_backward_tilt_limit" value="0.05" />
     <xacro:property name="torso_pan_limit" value="0.2" />
 
     <xacro:property name="torso_depth" value="0.2" />
@@ -470,7 +470,7 @@ Parameters:
 
     <joint name="torso_tilt_joint" type="${rotate_joint_type}">
         <axis xyz="0 1 0"/>
-        <limit effort="10000.0" lower="-${torso_backward_tilt_limit}" upper="${torso_forward_tilt_limit}" velocity="1.57"/>
+        <limit effort="10000.0" lower="-${torso_backward_tilt_limit}" upper="${torso_forward_tilt_limit}" velocity="0.5"/>
         <origin rpy="0 0 0" xyz="0 0 0"/>
         <parent link="torso_pan"/>
         <child link="torso"/>
@@ -478,7 +478,7 @@ Parameters:
 
     <joint name="torso_pan_joint" type="${rotate_joint_type}">
         <axis xyz="0 0 1"/>
-        <limit effort="10000.0" lower="-${torso_pan_limit}" upper="${torso_pan_limit}" velocity="1.57"/>
+        <limit effort="10000.0" lower="-${torso_pan_limit}" upper="${torso_pan_limit}" velocity="0.5"/>
         <origin rpy="0 0 0" xyz="0 0 0"/>
         <parent link="torso_sagital_link"/>
         <child link="torso_pan"/>
@@ -486,7 +486,7 @@ Parameters:
 
     <joint name="torso_sagital_joint" type="${translate_joint_type}">
         <axis xyz="0 1 0"/>
-        <limit effort="10000.0" lower="-${torso_right_limit}" upper="${torso_left_limit}" velocity="0.1"/>
+        <limit effort="10000.0" lower="-${torso_right_limit}" upper="${torso_left_limit}" velocity="0.2"/>
         <origin rpy="0 0 0" xyz="0 0 0"/>
         <parent link="torso_frontal_link"/>
         <child link="torso_sagital_link"/>
@@ -494,7 +494,7 @@ Parameters:
 
     <joint name="torso_frontal_joint" type="${translate_joint_type}">
         <axis xyz="1 0 0"/>
-        <limit effort="10000.0" lower="-${torso_backward_limit}" upper="${torso_forward_limit}" velocity="0.1"/>
+        <limit effort="10000.0" lower="-${torso_backward_limit}" upper="${torso_forward_limit}" velocity="0.2"/>
         <xacro:insert_block name="origin"/>
         <parent link="${base_link}"/>
         <child link="torso_frontal_link"/>
