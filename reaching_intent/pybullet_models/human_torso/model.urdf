@@ -90,28 +90,28 @@ Parameters:
   </link>
   <joint name="torso_tilt_joint" type="revolute">
     <axis xyz="0 1 0"/>
-    <limit effort="10000.0" lower="-0.2" upper="0.2" velocity="1.57"/>
+    <limit effort="10000.0" lower="-0.05" upper="0.2" velocity="0.5"/>
     <origin rpy="0 0 0" xyz="0 0 0"/>
     <parent link="torso_pan"/>
     <child link="torso"/>
   </joint>
   <joint name="torso_pan_joint" type="revolute">
     <axis xyz="0 0 1"/>
-    <limit effort="10000.0" lower="-0.2" upper="0.2" velocity="1.57"/>
+    <limit effort="10000.0" lower="-0.2" upper="0.2" velocity="0.5"/>
     <origin rpy="0 0 0" xyz="0 0 0"/>
     <parent link="torso_sagital_link"/>
     <child link="torso_pan"/>
   </joint>
   <joint name="torso_sagital_joint" type="prismatic">
     <axis xyz="0 1 0"/>
-    <limit effort="10000.0" lower="-0.4" upper="0.4" velocity="0.1"/>
+    <limit effort="10000.0" lower="-0.2" upper="0.2" velocity="0.1"/>
     <origin rpy="0 0 0" xyz="0 0 0"/>
     <parent link="torso_frontal_link"/>
     <child link="torso_sagital_link"/>
   </joint>
   <joint name="torso_frontal_joint" type="prismatic">
     <axis xyz="1 0 0"/>
-    <limit effort="10000.0" lower="-0.2" upper="0.1" velocity="0.1"/>
+    <limit effort="10000.0" lower="-0.1" upper="0.05" velocity="0.1"/>
     <origin rpy="0 0 0" xyz=" 0 0 0"/>
     <parent link="base_link"/>
     <child link="torso_frontal_link"/>
@@ -208,7 +208,7 @@ Parameters:
   </link>
   <joint name="l_shoulder_abduction_adduction_joint" type="revolute">
     <axis xyz="1 0 0"/>
-    <limit effort="1000.0" lower="0.1" upper="3.1415" velocity="2.5"/>
+    <limit effort="1000.0" lower="0.0" upper="3.1415" velocity="2.5"/>
     <origin rpy="0 0 0" xyz=" 0 0.10988 0.4938"/>
     <parent link="torso"/>
     <child link="l_shoulder_abduction_adduction"/>
@@ -372,7 +372,7 @@ Parameters:
   </link>
   <joint name="r_shoulder_abduction_adduction_joint" type="fixed">
     <axis xyz="-1 0 0"/>
-    <limit effort="1000.0" lower="0.1" upper="3.1415" velocity="2.5"/>
+    <limit effort="1000.0" lower="0.0" upper="3.1415" velocity="2.5"/>
     <origin rpy="0 0 0" xyz=" -0.00304 -0.10786 0.49489"/>
     <parent link="torso"/>
     <child link="r_shoulder_abduction_adduction"/>

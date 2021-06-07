@@ -62,11 +62,11 @@ def send_joint_pos_command(model, q, joint_indices, physicsClientId=0):
 
 
 def send_joint_vel_command(model, q_dot, joint_indices, physicsClientId=0):
-    lower, upper = get_actuable_joint_limits(model, physicsClientId)
-    angles = get_actuable_joint_angles(model, physicsClientId)
-    lower_vel = np.array(lower) - np.array(angles)
-    upper_vel = np.array(upper) - np.array(angles)
-    q_dot = np.clip(q_dot, lower_vel, upper_vel)
+    # lower, upper = get_actuable_joint_limits(model, physicsClientId)
+    # angles = get_actuable_joint_angles(model, physicsClientId)
+    # lower_vel = np.array(lower) - np.array(angles)
+    # upper_vel = np.array(upper) - np.array(angles)
+    # q_dot = np.clip(q_dot, lower_vel, upper_vel)
 
     vel_limit = np.array(get_actuable_joint_vel_limits(model, physicsClientId))
     q_dot = np.clip(q_dot, -vel_limit, vel_limit)

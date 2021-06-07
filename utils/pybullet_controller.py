@@ -128,7 +128,7 @@ class CPotentialFieldController(CController):
         self.model = 0
         self.eef_link = 0
         self.obstacles = []
-        self.max_dist = 0.3
+        self.max_dist = 0.2
         self.sim_id = 0
 
     def set_model(self, model, eef_link, physicsClientId=0):
@@ -191,24 +191,27 @@ class CPotentialFieldController(CController):
 
             # Exponential potential
             s = 0.2
-            cmd_rep -= cdir * 2 * s * s * np.exp(-0.5 * (dist / s) * (dist / s)) / (s * np.sqrt(2 * np.pi))
+            cmd_rep -= cdir * 10 * s * s * np.exp(-0.5 * (dist / s) * (dist / s)) / (s * np.sqrt(2 * np.pi))
 
             # draw_line(cpoint[6], cpoint[5], lifetime=.2)
             # draw_line(cpoint[5], np.array(cpoint[5]) + cdir*dist, lifetime=.2, color=[0, 0, 1])
 
+        # cmd_rep[2] = np.clip(cmd_rep[2], -1, .1)
+        # cmd_pid = np.clip(self.ctrl.get_command(state, ref), -2, 2)
         cmd_pid = self.ctrl.get_command(state, ref)
         self.err = self.ctrl.err
 
+        cmd_rep = self.Krep * cmd_rep * np.square(ref - state).sum()
 
         # print("PID action: ", cmd_pid)
         pose = get_eef_pose(self.model, self.eef_link, self.sim_id)
-        draw_line(pose[0:3] + cmd_pid * .1, pose[0:3], lifetime=.1, color=[0, 1, 0])
+        draw_line(pose[0:3] + cmd_pid, pose[0:3], lifetime=.1, color=[0, 1, 0])
 
         # print("Force Field action: ", cmd_rep)
         if len(points) > 0:
-            draw_line(pose[0:3] + cmd_rep * self.Krep * .1, pose[0:3], lifetime=.1, color=[1, 0, 0])
+            draw_line(pose[0:3] + cmd_rep, pose[0:3], lifetime=.1, color=[1, 0, 0])
 
-        return cmd_pid + self.Krep * cmd_rep
+        return cmd_pid + cmd_rep
 
     def reset(self):
         """
