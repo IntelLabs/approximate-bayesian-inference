@@ -1,0 +1,14 @@
+RGB
+exposure auto
+gain 70
+saturation 75
+auto white off
+white balance 2800
+
+DEPTH
+exposure auto
+gain 16
+laser power 360
+
+
+
