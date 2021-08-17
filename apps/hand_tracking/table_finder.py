@@ -1,5 +1,6 @@
 
-from ar_markers import detect_markers
+# from ar_markers import detect_markers
+from ar_markers.hamming.detect import detect_markers
 
 import numpy as np
 from collections import deque

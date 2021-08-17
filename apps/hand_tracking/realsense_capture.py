@@ -5,14 +5,14 @@ sys.path.insert(0, os.path.abspath('..'))
 import pyrealsense2 as rs
 import numpy as np
 import cv2
-from manipulator_planning_control.pybullet_utils import draw_trajectory
-from manipulator_planning_control.pybullet_utils import draw_line
-from manipulator_planning_control.pybullet_utils import draw_box
-from manipulator_planning_control.pybullet_utils import init_physics
+from utils.draw import draw_trajectory
+from utils.draw import draw_line
+from utils.draw import draw_box
+from utils.pybullet_utils import init_physics
 import pybullet as p
 import math
-from hand_tracking.table_finder import CTableFinder
-from hand_tracking.table_finder import CTableFinderPointCloud
+from apps.hand_tracking.table_finder import CTableFinder
+from apps.hand_tracking.table_finder import CTableFinderPointCloud
 import time
 import copy
 import threading
@@ -547,7 +547,7 @@ if __name__ == "__main__":
     print("OpenCV version: ", cv2.__version__)
     print(cv2.getBuildInformation())
 
-    use_ros = True
+    use_ros = False
     publish_images = True
     showImages = True
     visualize3D = False
@@ -561,10 +561,10 @@ if __name__ == "__main__":
     if use_ros:
         rospy.init_node('hand_traj_tracker', anonymous=True)
         pub_point = rospy.Publisher("/output/tracked_point", Point, queue_size=1)
-        pub_traj  = rospy.Publisher("/output/trajectory", PoseArray, queue_size=1)
+        pub_traj = rospy.Publisher("/output/trajectory", PoseArray, queue_size=1)
         pub_rgb = rospy.Publisher("/output/image_color", Image, queue_size=1)
-        pub_depth  = rospy.Publisher("/output/image_depth", Image, queue_size=1)
-        pub_seg  = rospy.Publisher("/output/image_seg", Image, queue_size=1)
+        pub_depth = rospy.Publisher("/output/image_depth", Image, queue_size=1)
+        pub_seg = rospy.Publisher("/output/image_seg", Image, queue_size=1)
         pub_state = rospy.Publisher("/output/state", Int8, queue_size=1)
         pub_camtf = rospy.Publisher("/output/camtf", Pose, queue_size=1)
         sub_color = rospy.Subscriber("/input/color_threshold", UInt8MultiArray, cb_color_threshold)
