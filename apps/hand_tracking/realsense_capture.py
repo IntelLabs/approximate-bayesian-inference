@@ -29,7 +29,7 @@ from std_msgs.msg import Empty
 from cv_bridge import CvBridge, CvBridgeError
 from std_msgs.msg import Header
 from collections import deque
-import transformations as trf
+import transforms3d as tf3d
 from scipy import stats
 
 
@@ -807,7 +807,7 @@ if __name__ == "__main__":
                     camtf_msg.position.y = transform[1, 3]
                     camtf_msg.position.z = transform[2, 3]
 
-                    quat = trf.quaternion_from_matrix(transform)
+                    quat = tf3d.quaternions.mat2quat(transform)
                     camtf_msg.orientation.x = quat[1]
                     camtf_msg.orientation.y = quat[2]
                     camtf_msg.orientation.z = quat[3]
