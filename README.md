@@ -23,7 +23,6 @@ Dependencies
 
 - Neural emulators
     - pytorch
-    - bayesian-layers
        
 - Plot results
     - matplotlib
