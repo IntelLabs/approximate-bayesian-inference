@@ -7,6 +7,7 @@ import PIL
 from PIL import Image, ImageFont
 from PIL import ImageFilter
 import copy
+import hashlib
 
 from pyglfw import pyglfw
 from pathlib import Path
@@ -945,7 +946,7 @@ class CScene(object):
     def set_font(self, font_path=None, font_size=64, font_color=(255, 255, 255, 255), background_color=(0, 0, 0, 0)):
         self.make_current()
         if font_path is None:
-            font_path = str(Path(__file__).resolve().parent) + "/../fonts/FiraCode-Medium.ttf"
+            font_path = str(Path(__file__).resolve().parent) + "/fonts/FiraCode-Medium.ttf"
         self.font = ImageFont.truetype(font_path, font_size)
         self.font_texture_map, self.font_texture_uv = self.make_font_texture(self.font, font_color, background_color)
         self.char_width, self.line_height = self.font.getsize("A")
@@ -1212,11 +1213,11 @@ class CScene(object):
 
 
 class CNode(object):
-    def __init__(self, id=None, parent=None, transform=CTransform(), geometry=None, material=None):
+    def __init__(self, id=None, parent=None, transform=None, geometry=None, material=None):
         self.id = id
         self.parent = None
         self.children = []
-        self.t = transform
+        self.t = transform if transform is not None else CTransform()
         self.geom = geometry
         self.mat = material
         self.pybullet_id = None
@@ -1252,9 +1253,9 @@ class CNode(object):
         for c in self.children:
             res = res + repr(c)
         if self.parent is not None:
-            res = res + "id: %08d, parent: %08d," % (self.id, self.parent.id) + repr(self.t)
+            res = res + "id: %8s, parent: %08d," % (str(self.id), self.parent.id) + repr(self.t)
         else:
-            res = res + "id: %08d, parent: N/A," % self.id + repr(self.t) + " [ROOT]"
+            res = res + "id: %8s, parent: N/A," % (str(self.id)) + repr(self.t) + " [ROOT]"
 
         if self.geom is not None:
             res = res + " geom: " + repr(self.geom) + " visible: " + str(self.visible)
@@ -1375,7 +1376,10 @@ class CGeometry(object):
             prog['Texture'].value = tex_id
 
         if 'id' in prog:
-            prog['id'].value = id & 0xffffffff
+            if isinstance(id, str):
+                prog['id'].value = int(hashlib.sha256(id.encode('utf-8')).hexdigest(), 16) & 0xffffffff
+            else:
+                prog['id'].value = id & 0xffffffff
 
     def draw(self, perspective, view, model, mode=mgl.TRIANGLE_STRIP, id=0):
         # self.scene.make_current()
@@ -1527,7 +1531,7 @@ class CFloatingText(CGeometry):
     def set_font(self, font_path=None, font_size=64, font_color=(255, 255, 255, 255), background_color=(0, 0, 0, 0)):
         self.scene.make_current()
         if font_path is None:
-            font_path = str(Path(__file__).resolve().parent) + "/../fonts/FiraCode-Medium.ttf"
+            font_path = str(Path(__file__).resolve().parent) + "/fonts/FiraCode-Medium.ttf"
         self.font = ImageFont.truetype(font_path, font_size)
         self.font_texture_map, self.font_texture_uv = CScene.make_font_texture(self.font, font_color, background_color)
         self.char_width, self.line_height = self.font.getsize("A")
