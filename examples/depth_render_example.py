@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 import time
+import os
 from PIL import Image
 import numpy as np
 import transformations as tf
@@ -194,12 +195,11 @@ if __name__ == "__main__":
     scene = dict()
     scene["meshes"] = ["../models/intel_cup/intel_cup.obj",
                        "../models/duck/duck.obj",
-                       "../models/ball/red_ball.obj",
                        "../models/duck/duck.obj"]
 
     scene["translations"] = [(0, 0, 0), (-0.05, 0.2, 0.05), (0, -0.2, 0), (0, 0, 0.2)]
     scene["rotations"] = [(0, 0, 0), (-1.57, 0, 0), (0, 0, 0), (0, 0, 0)]
-    scene["ids"] = [np.random.randint(0, 2**24-1) & 0xffffffff for _ in range(4)]
+    scene["ids"] = ["cup", "duck1", "duck2"]
 
     max_dist = 1.5
 
@@ -220,6 +220,12 @@ if __name__ == "__main__":
     print("Generated %d depth images in %3.3fs | %3.3ffps" % (len(cameras), t_elapsed, len(cameras)/t_elapsed))
 
     # Convert depth images with a colormap and save
+    # create depth and semantinc directories if not exists
+    if not os.path.exists("depth_images"):
+        os.makedirs("depth_images")
+    if not os.path.exists("semantic_images"):
+        os.makedirs("semantic_images")
+
     for i, img in enumerate(images_depth):
         if matplotlib_enabled:
             image_cm = np.uint8(cm.viridis(np.array(img) / max_dist) * 255)
@@ -243,4 +249,4 @@ if __name__ == "__main__":
     for i,occ in enumerate(occlusions):
         print("Frame %d. Occlusions:" % i)
         for o, id, mesh in zip(occ, scene["ids"], scene["meshes"]):
-            print("ID: %08d. Occlusion: %5.3f Mesh: %s" % (id, 1-o, mesh.split("/")[-1]))
+            print("ID: %8s. Occlusion: %5.3f Mesh: %s" % (str(id), 1-o, mesh.split("/")[-1]))
