@@ -4,6 +4,7 @@ from pyViewer.viewer import CGeometry
 from pyViewer.viewer import CNode
 from pyViewer.viewer import CTransform
 import transformations as tf
+import plyfile
 
 
 def make_objects(ctx, object_paths, object_poses, object_ids):
@@ -144,17 +145,21 @@ def make_mesh(ctx, filename, scale=1.0):
     else:
         mesh_filename = filename
 
-    meshes = pyobj.Wavefront(mesh_filename, collect_faces=True)
-    # Iterate vertex data collected in each material
-    data = None
-    for name, material in meshes.materials.items():
-        m_vertex_data = extract_vertex_data(material, scale=scale)
-        if material.texture is not None:
-            geom.set_texture(material.texture.path)
-        if data is None:
-            data = m_vertex_data
-        else:
-            data = np.vstack([data, m_vertex_data])
+    if mesh_filename.endswith(".obj"):
+        meshes = pyobj.Wavefront(mesh_filename, collect_faces=True)
+        # Iterate vertex data collected in each material
+        data = None
+        for name, material in meshes.materials.items():
+            m_vertex_data = extract_vertex_data(material, scale=scale)
+            if material.texture is not None:
+                geom.set_texture(material.texture.path)
+            if data is None:
+                data = m_vertex_data
+            else:
+                data = np.vstack([data, m_vertex_data])
+
+    if mesh_filename.endswith(".ply"):
+        raise NotImplementedError("PLY file format is not supported yet")
 
     geom.set_data(data.astype(np.float32).reshape(-1).tobytes())
 
