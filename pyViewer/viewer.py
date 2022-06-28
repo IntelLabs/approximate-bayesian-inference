@@ -1,4 +1,5 @@
 import os
+from dataclasses import dataclass
 import string
 import numpy as np
 import transformations as tf
@@ -325,6 +326,18 @@ class CTransform(object):
         return matrix
 
 
+@dataclass
+class CCameraIntrinsics(object):
+    def __init__(self, fx, fy, cx, cy, width, height, skew):
+        self.fx: float = fx
+        self.fy: float = fy
+        self.cx: float = cx
+        self.cy: float = cy
+        self.width: int = width
+        self.height: int = height
+        self.skew = skew
+
+
 class CCamera(object):
     def __init__(self, alpha=0.7, beta=0.7, distance=2.0, focus=(0.0, 0.0, 0.0), up=(0.0, 0.0, 1.0),
                  width=640, height=480, focal_px=620, ctx=None):
@@ -376,6 +389,12 @@ class CCamera(object):
         self.fy = fy
         self.cx = cx
         self.cy = cy
+
+    def get_intrinsics(self):
+        return CCameraIntrinsics(self.fx, self.fy,
+                                 self.cx, self.cy,
+                                 self.width, self.height,
+                                 self.s)
 
     def process_event(self, event):
         if event.type == CEvent.KEYDOWN:
