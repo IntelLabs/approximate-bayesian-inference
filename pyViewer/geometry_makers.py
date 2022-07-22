@@ -4,7 +4,6 @@ from pyViewer.viewer import CGeometry
 from pyViewer.viewer import CNode
 from pyViewer.viewer import CTransform
 import transformations as tf
-import plyfile
 
 
 def make_objects(ctx, object_paths, object_poses, object_ids):
