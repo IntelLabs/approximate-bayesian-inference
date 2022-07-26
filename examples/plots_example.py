@@ -4,7 +4,7 @@ import numpy as np
 from pyViewer.viewer import CScene, CPointCloud, CNode, CTransform, CEvent, CImage, CGLFWWindowManager, CFloatingText, CLinePlot, CBarPlot, CLines, CCamera
 from pyViewer.geometry_makers import make_mesh, make_objects
 from pyViewer.models import REFERENCE_FRAME_MESH, FLOOR_MESH
-import transformations as tf
+import transforms3d as tf
 
 
 def plots_example():
@@ -23,8 +23,9 @@ def plots_example():
     # Example standalone line plot
     plot_display = CLinePlot(scene)
     plot_display_node = CNode(geometry=plot_display,
-                              transform=CTransform(tf.compose_matrix(translate=[0, 0, 0],
-                                                                     angles=[np.pi/2, 0, np.pi/2])))
+                              transform=CTransform(tf.affines.compose(T=[0, 0, 0],
+                                                                      R=tf.euler.euler2mat(np.pi/2, 0, np.pi/2),
+                                                                      Z=np.ones(3))))
     scene.insert_graph([plot_display_node])
     plot_display.set_x_ticks(20, c=(0, 0, 0, 1))
     plot_display.set_y_ticks(5, c=(0, 0, 0, 1))
@@ -40,8 +41,10 @@ def plots_example():
     # Example standalone bar plot
     bplot_display = CBarPlot(scene)
     bplot_display_node = CNode(geometry=bplot_display,
-                               transform=CTransform(tf.compose_matrix(translate=[0, 1.1, 0],
-                                                                      angles=[np.pi/2, 0, np.pi/2])))
+                               transform=CTransform(tf.affines.compose(
+                                   T=[0, 1.1, 0],
+                                   R=tf.euler.euler2mat(np.pi/2, 0, np.pi/2),
+                                   Z=np.ones(3))))
 
     scene.insert_graph([bplot_display_node])
     bplot_display.set_x_ticks(20, c=(0, 0, 0, 1))

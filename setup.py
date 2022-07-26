@@ -27,6 +27,6 @@ setup(
         "pyopengl",
         "pillow",
         "pyglfw",
-        "transformations"
+        "transforms3d"
     ],
 )

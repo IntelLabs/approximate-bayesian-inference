@@ -3,8 +3,7 @@ import pywavefront as pyobj
 from pyViewer.viewer import CGeometry
 from pyViewer.viewer import CNode
 from pyViewer.viewer import CTransform
-import transformations as tf
-import plyfile
+import transforms3d as tf
 
 
 def make_objects(ctx, object_paths, object_poses, object_ids):
@@ -12,7 +11,13 @@ def make_objects(ctx, object_paths, object_poses, object_ids):
     for path, pose, id in zip(object_paths, object_poses, object_ids):
         nodes.append(
             CNode(geometry=make_mesh(ctx, path, scale=1.0), id=id,
-                  transform=CTransform(tf.compose_matrix(translate=pose[0:3], angles=pose[3:])))
+                  transform=CTransform(
+                      tf.affines.compose(T=pose[0:3],
+                                         R=tf.euler.euler2mat(pose[3],
+                                                              pose[4],
+                                                              pose[5],
+                                                              axes='sxyz'),
+                                         Z=np.ones(3))))
         )
 
     return nodes

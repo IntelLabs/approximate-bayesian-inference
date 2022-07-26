@@ -4,7 +4,7 @@
 import time
 import pybullet as pb
 import numpy as np
-import transformations as tf
+import transforms3d as tf
 from pyViewer.viewer import CScene, CPointCloud, CNode, CTransform, CEvent, CImage, CGLFWWindowManager
 from pyViewer.geometry_makers import make_mesh
 from pyViewer.models import REFERENCE_FRAME_MESH, FLOOR_MESH
@@ -54,7 +54,9 @@ def pybullet_example():
 
     # Example floor
     floor_node = CNode(geometry=make_mesh(scene, FLOOR_MESH, scale=1.0),
-                       transform=CTransform(tf.compose_matrix(translate=[0, 0, -0.65])))
+                       transform=CTransform(tf.affines.compose(T=[0, 0, -0.65],
+                                                               R=np.eye(3),
+                                                               Z=np.ones(3))))
     scene.insert_graph([floor_node])
 
     # Load pybullet geometry

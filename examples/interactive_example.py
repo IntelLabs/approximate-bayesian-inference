@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 import time
 import numpy as np
-import transformations as tf
+import transforms3d as tf
 from PIL import Image
 
 try:
@@ -78,7 +78,9 @@ def interactive_example():
     ###################################################################################################################
     # Example load single object mesh
     floor_node = CNode(geometry=make_mesh(scene, FLOOR_MESH, scale=1.0),
-                       transform=CTransform(tf.compose_matrix(translate=[0, 0, -0.65])))
+                       transform=CTransform(tf.affines.compose(T=[0, 0, -0.65],
+                                                               R=np.eye(3),
+                                                               Z=np.ones(3))))
     scene.insert_graph([floor_node])
 
     # Example reference frame size 1.0
@@ -88,7 +90,10 @@ def interactive_example():
 
     ###################################################################################################################
     # Example camera facing text. It has to be drawn last because of the transparency order
-    textnode = CNode(geometry=CFloatingText(scene), transform=CTransform(tf.compose_matrix(translate=[0, 0, 1.0])))
+    textnode = CNode(geometry=CFloatingText(scene),
+                     transform=CTransform(tf.affines.compose(T=[0, 0, 1.0],
+                                                             R=np.eye(3),
+                                                             Z=np.ones(3))))
     textnode.geom.set_text("Camera facing text example.")
     textnode.geom.set_position((0, 0, 1))
     textnode.geom.set_height(0.1)
@@ -144,8 +149,10 @@ def interactive_example():
     # Example standalone line plot
     plot_display = CLinePlot(scene)
     plot_display_node = CNode(geometry=plot_display,
-                              transform=CTransform(tf.compose_matrix(translate=[0, 1, 0],
-                                                                     angles=[np.pi/2, 0, np.pi/2])))
+                              transform=CTransform(
+                                  tf.affines.compose(T=[0, 1, 0],
+                                                     R=tf.euler.euler2mat(np.pi/2, 0, np.pi/2),
+                                                     Z=np.ones(3))))
     scene.insert_graph([plot_display_node])
     plot_display.set_x_ticks(20, c=(0, 0, 0, 1))
     plot_display.set_y_ticks(5, c=(0, 0, 0, 1))
@@ -161,8 +168,10 @@ def interactive_example():
     # Example standalone bar plot
     bplot_display = CBarPlot(scene)
     bplot_display_node = CNode(geometry=bplot_display,
-                               transform=CTransform(tf.compose_matrix(translate=[0, 2.1, 0],
-                                                                      angles=[np.pi/2, 0, np.pi/2])))
+                               transform=CTransform(tf.affines.compose(
+                                   T=[0, 2.1, 0],
+                                   R=tf.euler.euler2mat(np.pi/2, 0, np.pi/2),
+                                   Z=np.ones(3))))
 
     scene.insert_graph([bplot_display_node])
     bplot_display.set_x_ticks(20, c=(0, 0, 0, 1))

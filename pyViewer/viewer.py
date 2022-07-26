@@ -2,7 +2,7 @@ import os
 from dataclasses import dataclass
 import string
 import numpy as np
-import transformations as tf
+import transforms3d as tf
 import moderngl as mgl
 import PIL
 from PIL import Image, ImageFont
@@ -302,7 +302,7 @@ class CTransform(object):
 
     def __repr__(self):
         pos = self.t[0:3, 3].flatten()
-        euler = tf.euler_from_matrix(self.t)
+        euler = tf.euler.mat2euler(self.t[0:3, 0:3])
         return " pos:%6.3f %6.3f %6.3f" % (pos[0], pos[1], pos[2]) + \
                " rot:%6.3f %6.3f %6.3f" % (euler[0], euler[1], euler[2])
 
@@ -475,7 +475,10 @@ class CCamera(object):
         y_vec = np.cross(z_vec, x_vec)
         y_vec = y_vec / np.linalg.norm(y_vec)
 
-        trans = tf.compose_matrix(translate=-position)
+        trans = np.array([[1, 0, 0, -position[0]],
+                          [0, 1, 0, -position[1]],
+                          [0, 0, 1, -position[2]],
+                          [0, 0, 0, 1]], dtype=float)
         self.position = position
         rot = np.eye(4)
         rot[0, 0:3] = x_vec

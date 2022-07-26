@@ -4,7 +4,7 @@ except ModuleNotFoundError:
     print("Pybullet required for pybullet support functions")
     exit(0)
 
-import transformations as tf
+import transforms3d as tf
 from pyViewer.viewer import CTransform, CNode
 from pyViewer.geometry_makers import make_mesh
 from pyViewer.models import REFERENCE_FRAME_MESH
@@ -68,14 +68,14 @@ def update_pybullet_nodes(nodes, physicsClientId=0):
                 state = p.getBasePositionAndOrientation(b.pybullet_id, physicsClientId=physicsClientId)
                 pos = state[0]
                 rot = state[1]
-                mat = tf.quaternion_matrix([rot[3],rot[0],rot[1],rot[2]])
+                mat = tf.quaternions.quat2mat([rot[3],rot[0],rot[1],rot[2]])
                 mat[0:3, 3] = pos
                 b.t = CTransform(mat)
             else:
                 state = p.getLinkState(b.pybullet_id, b.pybullet_link_id, physicsClientId=physicsClientId)
                 pos = state[4]  # Link World absolute position
                 rot = state[5]  # Link World absolute orientation
-                mat = tf.quaternion_matrix([rot[3], rot[0], rot[1], rot[2]])
+                mat = tf.quaternions.quat2mat([rot[3], rot[0], rot[1], rot[2]])
                 mat[0:3, 3] = pos
                 b.t = CTransform(np.matmul(b.pybullet_v_mat, mat))
 

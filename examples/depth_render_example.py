@@ -3,7 +3,7 @@ import time
 import os
 from PIL import Image
 import numpy as np
-import transformations as tf
+import transforms3d as tf
 
 from pyViewer.viewer import CScene, CNode, CTransform, COffscreenWindowManager, CGLFWWindowManager
 from pyViewer.geometry_makers import make_mesh
@@ -93,7 +93,12 @@ def semantic_render(scene, camera_positions=[(0.7, 0.7, 2)], width=100, height=1
     object_ids = scene["ids"]
     for i in range(len(object_meshes)):
         object_node = CNode(geometry=make_mesh(viz, object_meshes[i], scale=1.0), id=object_ids[i],
-                            transform=CTransform(tf.compose_matrix(translate=object_translations[i], angles=object_rotations[i])))
+                            transform=CTransform(tf.affines.compose(
+                                T=object_translations[i],
+                                R=tf.euler.euler2mat(object_rotations[i][0],
+                                                     object_rotations[i][1],
+                                                     object_rotations[i][2]),
+                                Z=np.ones(3))))
         viz.insert_graph([object_node])
 
     #####################################################
@@ -158,7 +163,12 @@ def depth_render(scene, camera_positions=[(0.7, 0.7, 2)], width=100, height=100,
     for i in range(len(object_meshes)):
 
         object_node = CNode(geometry=make_mesh(viz, object_meshes[i], scale=1.0),
-                            transform=CTransform(tf.compose_matrix(translate=object_translations[i], angles=object_rotations[i])))
+                            transform=CTransform(
+                                tf.affines.compose(T=object_translations[i],
+                                                   R=tf.euler.euler2mat(object_rotations[i][0],
+                                                                        object_rotations[i][1],
+                                                                        object_rotations[i][2]),
+                                                   Z=np.ones(3))))
         viz.insert_graph([object_node])
 
     #####################################################

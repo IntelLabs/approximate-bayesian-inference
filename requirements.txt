@@ -4,4 +4,4 @@ moderngl>=5.6.0
 pyopengl
 pillow
 pyglfw
-transformations
+transforms3d

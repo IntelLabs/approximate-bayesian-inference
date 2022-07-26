@@ -9,7 +9,9 @@ A simple OpenGL viewer for python with a simple SceneGraph.
 #### Linux
 ```
 sudo apt install libglfw3
+pip install .
 ```
+
 
 #### Windows
 [Download libglfw3 precompiled binaries](https://www.glfw.org/download.html) and put the library **glfw3.dll** in 
