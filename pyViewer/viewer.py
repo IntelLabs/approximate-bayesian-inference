@@ -10,6 +10,7 @@ from PIL import ImageFilter
 import copy
 import hashlib
 
+from PIL.ImageFont import FreeTypeFont
 from pyglfw import pyglfw
 from pathlib import Path
 
@@ -971,7 +972,7 @@ class CScene(object):
             font_path = str(Path(__file__).resolve().parent) + "/fonts/FiraCode-Medium.ttf"
         self.font = ImageFont.truetype(font_path, font_size)
         self.font_texture_map, self.font_texture_uv = self.make_font_texture(self.font, font_color, background_color)
-        self.char_width, self.line_height = self.font.getsize("A")
+        _, _, self.char_width, self.line_height = self.font.getbbox("A")
         self.text_display = CImage(self)
         self.text_display.draw_always = True
         self.text_display.set_texture(self.font_texture_map.transpose(Image.FLIP_TOP_BOTTOM))
@@ -982,7 +983,7 @@ class CScene(object):
         text = string.printable
 
         # Generate a texture image with desired background and text colors
-        text_width, text_height = font.getsize(text)
+        _, _, text_width, text_height = font.getbbox(text)
         texmap = font.getmask(text, mode='L')
         text_idx = (np.array(texmap, dtype=np.uint8) > 0).reshape((texmap.size[1], texmap.size[0]))
         back_idx = (np.array(texmap, dtype=np.uint8) == 0).reshape((texmap.size[1], texmap.size[0]))
@@ -996,7 +997,7 @@ class CScene(object):
 
         # TODO: This assumes fixed width characters, compute per-character width to enable variable width typefaces
         # Compute each character coordinates
-        char_width, char_height = font.getsize("A")
+        _, _, char_width, char_height = font.getbbox("A")
         for i, s in enumerate(text):
             v0 = 0
             v1 = 1
@@ -1556,7 +1557,7 @@ class CFloatingText(CGeometry):
             font_path = str(Path(__file__).resolve().parent) + "/fonts/FiraCode-Medium.ttf"
         self.font = ImageFont.truetype(font_path, font_size)
         self.font_texture_map, self.font_texture_uv = CScene.make_font_texture(self.font, font_color, background_color)
-        self.char_width, self.line_height = self.font.getsize("A")
+        _, _, self.char_width, self.line_height = self.font.getbbox("A")
         self.set_texture(self.font_texture_map.transpose(Image.FLIP_TOP_BOTTOM), build_mipmaps=False)
         self.aspect_ratio = self.line_height / self.char_width
         self.width = self.height / self.aspect_ratio

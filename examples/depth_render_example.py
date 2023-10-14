@@ -33,7 +33,7 @@ def get_visibility_percent(img_full, img_ind, i, save_images=False):
         pil_image = Image.frombytes("RGBA", img_ind.shape[0:2], img_ind)
         pil_image.save("semantic_images/semantic_%d_obj_%d_single.png" % (i, index & 0xffffffff), "PNG")
 
-    return partial/np.float(total)
+    return partial/float(total)
 
 
 def semantic_render_with_occlusion(scene, camera_positions=[(0.7, 0.7, 2)], width=100, height=100, camera_K=None, show=False):
