@@ -43,6 +43,8 @@ class CInferenceABCSMC(CBaseInferenceAlgorithm):
 
         self.initialize(nsamples, prior_sampler)
 
+        likelihood = np.array([])
+
         # While not all particles are accepted
         for threshold in alpha:
             self.accepted = torch.zeros(nsamples).double().to(self.generative_model.model.device)
