@@ -33,6 +33,7 @@ class CInferenceABCReject(CBaseInferenceAlgorithm):
         assert self.generative_model is not None
 
         self.initialize(nsamples, prior_sampler)
+        likelihood = t_tensor([])
 
         # While not all particles are accepted
         timeout = 10.0
