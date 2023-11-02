@@ -85,13 +85,13 @@ nn_model_path = "pytorch_models/ne_fc%d_10k2D_MSE_in%d_out%d.pt" % (nn_layers, i
 load_existing_model = False
 
 # Dataset to use
-dataset_path = "datasets/dataset10K_2D_ur5_96p.dat"
+dataset_path = "datasets/dataset1K_2D_ur5_96p.dat"
 # Portion (0. - 1.) of the dataset used for training. The remainder will be used for testing.
 train_percentage = 0.9
 
 # Training stops once the loss is below the threshold or the max_train_epochs are reached
 train_loss_threshold = 0.0001
-max_train_epochs = 1000
+max_train_epochs = 300
 
 # controls the number of times that the training dataset is gone over on each train call
 train_epochs = 1

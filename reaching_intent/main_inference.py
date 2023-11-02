@@ -135,7 +135,7 @@ if __name__ == "__main__":
     print("Prepare observation model")
     observer_params = copy.deepcopy(simulator_params)
     observer_params["sigma"] = 0.001  # Additional gaussian noise added to observed trajectories
-    observer_params["dataset_path"] = "./datasets/dataset10K_2D_ur5_96p.dat"
+    observer_params["dataset_path"] = "./datasets/dataset1K_2D_ur5_96p.dat"
     observer_params["min_points"] = 3
     observer_params["obs_dimensions"] = 3
     observer_params["num_trajs"] = 100
@@ -299,7 +299,7 @@ if __name__ == "__main__":
         else:
             frame.append(list(stats.values()))
         df = pd.DataFrame(data=frame, columns=stats.keys())
-        df_stats = df.mean().append(df.std(), )
+        df_stats = df.mean()._append(df.std(), )
         print(df_stats)
 
         # Compute the maximum a posteriori particle, without considering multiple slacks
@@ -391,7 +391,7 @@ if __name__ == "__main__":
             plt.title(debug_text, fontsize=8)
             plt.show(block=False)
             plt.pause(0.01)
-            plt.savefig("results/inference_%s_it%d.png" % (neInference.name, iteration), dps=700)
+            plt.savefig("results/inference_%s_it%d.png" % (neInference.name, iteration), dpi=700)
         else:
             time.sleep(0.01)
 
