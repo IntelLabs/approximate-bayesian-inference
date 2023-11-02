@@ -14,22 +14,59 @@ implementations of well-known sampling algorithms that can be selected as the sa
 at hand.
 
 
-Dependencies
+Installation
 ============
+Clone the repo, install dependencies and add the repo root to the pythonpath
+```shell
+git clone https://github.com/intel-sandbox/personal.javierfe.approximate-bayesian-inference approximate-bayesian-inference
+cd approximate-bayesian-inference
+pip install -r requirements.txt
+export PYTHONPATH=$PYTHONPATH:`pwd`
+```
+
+Test that it is running with the data-generation process of the provided
+reaching intent prediction example. This process might take about 5 minutes depending
+on your hardware. It will generate 1K example reaching trajectories used to train 
+the neural emulator.
+```shell
+cd reaching_intent
+python3 main_datageneration.py ./datasets/dataset1K_2D_ur5_96p.dat 1000 100
+python3 main_training.py
+```
+
+For the inference example to run you need to install the sampling algorithms library
+```shell
+git clone https://github.com/IntelLabs/ais-benchmarks
+cd ais-benchmarks
+pip install cython scikit-build
+pip install -r requirements.txt
+export PYTHONPATH=$PYTHONPATH:`pwd`
+```
+
+Now you're ready to run the intent prediction example
+```shell
+python3 main_inference.py
+```
+
+#### Dependency details
 - General
     - numpy
-    - json
+    - scipy
     - sampling-algorithms
 
 - Neural emulators
-    - pytorch
-       
+    - torch
+
 - Plot results
     - matplotlib
 
+- Reaching intent prediction application
+  - pybullet
 
-Notation
-========
+
+
+ABC Notation
+============
 - x      : state space
 
 - o      : observation space.
@@ -116,4 +153,4 @@ References
 - Felip, J., Ahuja, N., Gómez-Gutiérrez, D., Tickoo, O., & Mansinghka, V. (2019). Real-time Approximate Bayesian 
 Computation for Scene Understanding. arXiv preprint arXiv:1905.13307.
 
-Last updated: Jun 2020
+Last updated: Oct 2023

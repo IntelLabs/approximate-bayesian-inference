@@ -4,3 +4,5 @@ pybullet
 pillow
 matplotlib
 scipy
+pandas
+joblib
