@@ -1,3 +1,7 @@
+
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 import json
 import torch.utils.data
 from common.common import *

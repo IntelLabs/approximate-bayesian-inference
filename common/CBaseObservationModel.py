@@ -1,3 +1,7 @@
+
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 class CBaseObservationModel(object):
     def __init__(self, params):
         pass

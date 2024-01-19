@@ -1,3 +1,7 @@
+
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 import numpy as np
 import pybullet
 from utils.draw import draw_line

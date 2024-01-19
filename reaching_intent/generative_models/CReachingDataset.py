@@ -1,3 +1,7 @@
+
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 import time
 import json
 from common.common import *

@@ -1,4 +1,8 @@
 
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
+
 # from ar_markers import detect_markers
 from ar_markers.hamming.detect import detect_markers
 

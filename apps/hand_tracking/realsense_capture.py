@@ -1,3 +1,7 @@
+
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 #!/usr/bin/python3
 import sys, os
 sys.path.insert(0, os.path.abspath('..'))

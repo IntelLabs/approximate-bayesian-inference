@@ -1,3 +1,7 @@
+
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 from common.common import *
 from neural_emulators.CBaseGenerativeNeuralEmulator import CBaseGenerativeNeuralEmulator
 

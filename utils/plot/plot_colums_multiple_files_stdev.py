@@ -1,3 +1,7 @@
+
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np

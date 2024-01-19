@@ -1,3 +1,7 @@
+
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 from common import CBaseInferenceAlgorithm
 from utils.draw import draw_samples
 

@@ -1,3 +1,7 @@
+
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 from common.common import *
 from reaching_intent.generative_models.CReachingDataset import CReachingDataset
 from common.CBaseObservationModel import CBaseObservationModel

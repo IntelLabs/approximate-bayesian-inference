@@ -1,3 +1,7 @@
+
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 """
 This class extends the generic generative model with the methods that a neural emulator must implement
 

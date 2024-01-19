@@ -1,4 +1,8 @@
 
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
+
 class CBaseInferenceAlgorithm(object):
     def __init__(self):
         pass

@@ -1,3 +1,7 @@
+
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 """
     File name: BaseSpace.py
     Author: Javier Felip Leon

@@ -1,4 +1,8 @@
 
+# Copyright (C) 2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
+
 from common.common import *
 from common.CBaseSampler import CBaseSampler
 
