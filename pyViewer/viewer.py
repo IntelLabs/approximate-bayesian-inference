@@ -754,6 +754,9 @@ class CScene(object):
         else:
             self.ctx = mgl.create_context()
 
+        # self.ctx.gc_mode = 'context_gc'
+        # self.ctx.gc()
+
         self.fbo_rgb = self.ctx.simple_framebuffer((self.width, self.height))
 
         self.width = width
@@ -794,7 +797,7 @@ class CScene(object):
         self.perspective = np.matmul(ndc_matrix, proj_matrix)
         # self.perspective = ndc_matrix
 
-        self.set_font(font_path=None, font_size=48)
+        self.set_font(font_path=None, font_size=64)
 
         self.segment_program = self.ctx.program(vertex_shader=semantic_vertex_shader,
                                                 fragment_shader=semantic_fragment_shader)
@@ -970,9 +973,12 @@ class CScene(object):
         self.make_current()
         if font_path is None:
             font_path = str(Path(__file__).resolve().parent) + "/fonts/FiraCode-Medium.ttf"
+            print(f"Font path: {font_path}")
         self.font = ImageFont.truetype(font_path, font_size)
         self.font_texture_map, self.font_texture_uv = self.make_font_texture(self.font, font_color, background_color)
-        _, _, self.char_width, self.line_height = self.font.getbbox("A")
+        left, top, right, bottom = self.font.getbbox("A")
+        self.char_width = self.font.getlength("A")
+        self.line_height = (bottom - top) * 1.5
         self.text_display = CImage(self)
         self.text_display.draw_always = True
         self.text_display.set_texture(self.font_texture_map.transpose(Image.FLIP_TOP_BOTTOM))
@@ -983,7 +989,10 @@ class CScene(object):
         text = string.printable
 
         # Generate a texture image with desired background and text colors
-        _, _, text_width, text_height = font.getbbox(text)
+        # _, _, text_width, text_height = font.getbbox(text)
+        left, top, right, bottom = font.getbbox(text)
+        text_width = font.getlength(text)
+        text_height = bottom - top
         texmap = font.getmask(text, mode='L')
         text_idx = (np.array(texmap, dtype=np.uint8) > 0).reshape((texmap.size[1], texmap.size[0]))
         back_idx = (np.array(texmap, dtype=np.uint8) == 0).reshape((texmap.size[1], texmap.size[0]))
@@ -994,10 +1003,15 @@ class CScene(object):
         # Form the image with antialiasing
         teximg = Image.fromarray(np.array(texarray), mode="RGBA").filter(ImageFilter.SMOOTH_MORE)
 
+        # Save the texture image to temporary file for debugging
+        teximg.save("/tmp/pyviewer_font_texture.png")
 
         # TODO: This assumes fixed width characters, compute per-character width to enable variable width typefaces
         # Compute each character coordinates
-        _, _, char_width, char_height = font.getbbox("A")
+        # _, _, char_width, char_height = font.getbbox("A")
+        left, top, right, bottom = font.getbbox("A")
+        char_width = font.getlength("A")
+        char_height = bottom - top
         for i, s in enumerate(text):
             v0 = 0
             v1 = 1
@@ -1558,6 +1572,9 @@ class CFloatingText(CGeometry):
         self.font = ImageFont.truetype(font_path, font_size)
         self.font_texture_map, self.font_texture_uv = CScene.make_font_texture(self.font, font_color, background_color)
         _, _, self.char_width, self.line_height = self.font.getbbox("A")
+        left, top, right, bottom = self.font.getbbox("A")
+        self.char_width = self.font.getlength("A")
+        self.line_height = (bottom - top) * 1.5
         self.set_texture(self.font_texture_map.transpose(Image.FLIP_TOP_BOTTOM), build_mipmaps=False)
         self.aspect_ratio = self.line_height / self.char_width
         self.width = self.height / self.aspect_ratio
