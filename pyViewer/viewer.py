@@ -1714,7 +1714,6 @@ class CLines(CGeometry):
         self.scene.make_current()
         if data is None or len(data) == 0:
             print("Warning :: " + str(__class__) + ". Setting empty data.")
-            return
 
         self.data = data
         self.vbo = self.ctx.buffer(self.data)
