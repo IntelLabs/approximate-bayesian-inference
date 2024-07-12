@@ -33,6 +33,7 @@ point_cloud_vertex_shader = '''
 #version 330 core
 
 uniform mat4 Mvp;
+uniform float point_size;
 
 in vec3 in_vert;
 in vec4 in_color;
@@ -42,6 +43,7 @@ out vec4 v_color;
 void main() {
 	v_color = in_color;
 	gl_Position = Mvp * vec4(in_vert, 1.0);
+    gl_PointSize = point_size;
 }
 '''
 
@@ -1525,8 +1527,10 @@ class CPointCloud(object):
 
         self.ctx.disable(mgl.BLEND)
         self.ctx.enable(mgl.DEPTH_TEST)
+        self.ctx.enable(mgl.PROGRAM_POINT_SIZE)
         mvp = np.matmul(perspective, np.matmul(view, model))
         self.prog['Mvp'].value = tuple(np.array(mvp, np.float32).reshape(-1, order='F'))
+        self.prog['point_size'].value = self.size
         if self.draw_mode is not None:
             mode = self.draw_mode
         self.ctx.point_size = self.size
