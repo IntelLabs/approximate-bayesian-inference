@@ -1239,6 +1239,17 @@ class CScene(object):
         if event.type == CEvent.KEYUP and event.data[0] == pyglfw.api.GLFW_KEY_N:
             self.show_normals = not self.show_normals
 
+    def bring_img_displays_to_front(self):
+        # Sort viewer scene nodes in such a way that images are drawn last
+        node_indices = range(len(self.root.children))
+        new_node_indices = []
+        for i in node_indices:
+            if isinstance(self.root.children[i].geom, CImage):
+                new_node_indices.append(i)
+            else:
+                new_node_indices.insert(0, i)
+        self.root.children = [self.root.children[i] for i in new_node_indices]
+
     def __repr__(self):
         res = "=====\n"
         res += "Scene\n"
