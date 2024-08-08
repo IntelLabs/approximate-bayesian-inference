@@ -1,5 +1,7 @@
 Approximate Bayesian Inference Framework
 ========================================
+[![CodeQL](https://github.com/ossf/scorecard-action/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/IntelLabs/approximate-bayesian-inference/actions/workflows/codeql-analysis.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/IntelLabs/approximate-bayesian-inference/badge)](https://scorecard.dev/viewer/?uri=github.com/IntelLabs/approximate-bayesian-inference)
 
 The aim of this repository is to help developers to use analysis-by-synthesis for their specific use cases. The 
 required tasks are to implement the required interfaces for custom generative models, likelihood functions and 
