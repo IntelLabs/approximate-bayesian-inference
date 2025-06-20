@@ -200,10 +200,9 @@ void main()
                     float((id & 0x0000ff00u) >> 8)/255.0, 
                     float((id & 0x00ff0000u) >> 16)/255.0, 
                     1.0);
-    if ( id < 0u )
-    {
-        v_color = v_color + dummy * 0.00001;
-    }
+    
+    v_color = v_color + dummy * 0.00001;
+	
 	gl_Position = Mvp * vec4(in_vert, 1.0);
 }
 '''

@@ -1,6 +1,5 @@
-# TODO: THERE IS A BUG WITH TEXTURES IN THE PYBULLET EXAMPLE
-
 #!/usr/bin/python3
+# TODO: THERE IS A BUG WITH TEXTURES IN THE PYBULLET EXAMPLE
 import time
 import pybullet as pb
 import numpy as np
