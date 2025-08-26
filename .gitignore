@@ -1,6 +1,9 @@
 .idea
 *.pyc
 *.ptepoch*
+*.pt
+*.dat
+*.train_report.txt
 datasets
 results
 venv
