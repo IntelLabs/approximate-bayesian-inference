@@ -50,7 +50,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6.0.2
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
@@ -92,7 +92,7 @@ jobs:
         token: ${{ secrets.SECURITY_TOKEN }}
         
     - name: GitHub Upload Release Artifacts
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v7.0.0
       with:
         name: report
         path: |
