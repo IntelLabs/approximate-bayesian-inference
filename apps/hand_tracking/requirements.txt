@@ -1,3 +1,2 @@
-ar_markers
 pyrealsense2
 transforms3d
